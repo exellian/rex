@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Span<'a> {
     code: &'a str,
     range: Range<usize>
@@ -13,6 +13,7 @@ pub struct SpanOwned {
 }
 
 mod implementation {
+    use std::fmt::{Debug, Formatter};
     use std::ops::Range;
     use crate::util::{Span, SpanOwned};
 
@@ -34,6 +35,12 @@ mod implementation {
                 value: self.value().to_string(),
                 range: self.range.clone()
             }
+        }
+    }
+
+    impl<'a> Debug for Span<'a> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.value())
         }
     }
 }

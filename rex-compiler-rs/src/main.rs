@@ -23,6 +23,6 @@ fn main() {
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();
-    println!("{:?}", view);
+    println!("{:#?}", view);
 
 }

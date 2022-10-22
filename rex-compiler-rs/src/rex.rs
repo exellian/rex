@@ -551,7 +551,7 @@ pub mod parse {
             punct: Punct<'a>
         }
         #[derive(Debug)]
-        pub struct Neg<'a> {
+        pub struct Bang<'a> {
             punct: Punct<'a>,
         }
         #[derive(Debug)]
@@ -589,6 +589,10 @@ pub mod parse {
         pub struct OrOr<'a> {
             punct0: Punct<'a>,
             punct1: Punct<'a>
+        }
+        #[derive(Debug)]
+        pub struct Xor<'a> {
+            punct: Punct<'a>
         }
         #[derive(Debug)]
         pub struct Eq<'a> {
@@ -667,7 +671,7 @@ pub mod parse {
             use crate::rex::lexer;
             use crate::rex::lexer::Lexer;
             use crate::rex::parse::Error;
-            use crate::rex::parse::primitive::{Add, And, AndAnd, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma, Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Neg, Or, OrOr, ParenLeft, ParenRight, Sub};
+            use crate::rex::parse::primitive::{Add, And, AndAnd, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma, Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Bang, Or, OrOr, ParenLeft, ParenRight, Sub, Xor};
 
             fn check_chars<P>(str: &str, predicate: P) -> bool where P: Fn(char) -> bool {
                 str.chars().all(predicate)
@@ -883,14 +887,14 @@ pub mod parse {
                 }
             }
 
-            impl<'a> Parse for Neg<'a> {
+            impl<'a> Parse for Bang<'a> {
                 type Error = Error;
                 type Token = Result<lexer::Token<'a>, lexer::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
                     return if punct.ch == Lexer::NEG {
-                        Ok((parser, Neg {
+                        Ok((parser, Bang {
                             punct
                         }))
                     } else {
@@ -1031,6 +1035,22 @@ pub mod parse {
                         }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
+                    }
+                }
+            }
+
+            impl<'a> Parse for Xor<'a> {
+                type Error = Error;
+                type Token = Result<lexer::Token<'a>, lexer::Error>;
+
+                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    return if punct.ch == Lexer::XOR {
+                        Ok((parser, Xor {
+                            punct
+                        }))
+                    } else {
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -1342,12 +1362,13 @@ pub mod parse {
     pub enum Expr<'a> {
         If(If<'a>),
         For(For<'a>),
+        UnaryAp(UnaryAp<'a>),
         Lit(primitive::Lit<'a>),
         Var(Var<'a>),
         Node(Node<'a>),
         Empty(Empty<'a>),
         Group(Group<'a, Expr<'a>>),
-        InfixAp(InfixAp<'a>),
+        BinaryAp(BinaryAp<'a>),
         SelectorAp(SelectorAp<'a>),
         Ap(Ap<'a>),
 
@@ -1359,22 +1380,43 @@ pub mod parse {
         right: primitive::ParenRight<'a>
     }
     #[derive(Debug)]
-    pub struct InfixAp<'a> {
+    pub struct BinaryAp<'a> {
         left: Box<Expr<'a>>,
-        right: InfixApRight<'a>
+        right: BinaryApRight<'a>
     }
     #[derive(Debug)]
-    pub struct InfixApRight<'a> {
-        op: PrimitiveOp<'a>,
+    pub struct BinaryApRight<'a> {
+        op: BinaryOp<'a>,
         right: Box<Expr<'a>>
     }
     #[derive(Debug)]
-    pub enum PrimitiveOp<'a> {
-        Plus(primitive::Add<'a>),
-        Minus(primitive::Sub<'a>),
+    pub enum BinaryOp<'a> {
         Multiplied(primitive::Mul<'a>),
         Divided(primitive::Div<'a>),
-        Modulo(primitive::Mod<'a>)
+        Plus(primitive::Add<'a>),
+        Minus(primitive::Sub<'a>),
+        Modulo(primitive::Mod<'a>),
+        And(primitive::AndAnd<'a>),
+        Or(primitive::OrOr<'a>),
+        BitAnd(primitive::And<'a>),
+        BitOr(primitive::Or<'a>),
+        BitXor(primitive::Xor<'a>),
+        Eq(primitive::EqEq<'a>),
+        Ne(primitive::Ne<'a>),
+        Le(primitive::Le<'a>),
+        Ge(primitive::Ge<'a>),
+        Lt(primitive::Lt<'a>),
+        Gt(primitive::Gt<'a>)
+    }
+    #[derive(Debug)]
+    pub struct UnaryAp<'a> {
+        op: UnaryOp<'a>,
+        right: Box<Expr<'a>>
+    }
+    #[derive(Debug)]
+    pub enum UnaryOp<'a> {
+        Neg(primitive::Sub<'a>),
+        Not(primitive::Bang<'a>)
     }
     #[derive(Debug)]
     pub struct If<'a> {
@@ -1441,7 +1483,7 @@ pub mod parse {
         use crate::cursor::Cursor;
         use crate::parser::{Parse, Parser};
         use crate::rex::lexer;
-        use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, InfixAp, InfixApRight, NamedSelector, Node, NodeOrBlock, primitive, PrimitiveOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View};
+        use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
         use crate::rex::parse::primitive::Empty;
 
         impl From<lexer::Error> for Error {
@@ -1649,26 +1691,32 @@ pub mod parse {
                                     (parser, Some(Expr::For(for0)))
                                 },
                                 None => {
-                                    let (parser, lit) = parser.opt_parse::<primitive::Lit>();
-                                    match lit {
-                                        Some(lit) => (parser, Some(Expr::Lit(lit))),
+                                    let (parser, unary_ap) = parser.opt_parse::<UnaryAp>();
+                                    match unary_ap {
+                                        Some(unary_ap) => (parser, Some(Expr::UnaryAp(unary_ap))),
                                         None => {
-                                            let (parser, group) = parser.opt_parse::<Group<Expr>>();
-                                            match group {
-                                                Some(group) => (parser, Some(Expr::Group(group))),
+                                            let (parser, lit) = parser.opt_parse::<primitive::Lit>();
+                                            match lit {
+                                                Some(lit) => (parser, Some(Expr::Lit(lit))),
                                                 None => {
-                                                    let (parser, var) = parser.opt_parse::<Var>();
-                                                    match var {
-                                                        Some(var) => (parser, Some(Expr::Var(var))),
+                                                    let (parser, group) = parser.opt_parse::<Group<Expr>>();
+                                                    match group {
+                                                        Some(group) => (parser, Some(Expr::Group(group))),
                                                         None => {
-                                                            let (parser, node) = parser.opt_parse::<Node>();
-                                                            match node {
-                                                                Some(node) => (parser, Some(Expr::Node(node))),
+                                                            let (parser, var) = parser.opt_parse::<Var>();
+                                                            match var {
+                                                                Some(var) => (parser, Some(Expr::Var(var))),
                                                                 None => {
-                                                                    let (parser, empty) = parser.opt_parse::<Empty>();
-                                                                    match empty {
-                                                                        Some(empty) => (parser, Some(Expr::Empty(empty))),
-                                                                        None => (parser, None)
+                                                                    let (parser, node) = parser.opt_parse::<Node>();
+                                                                    match node {
+                                                                        Some(node) => (parser, Some(Expr::Node(node))),
+                                                                        None => {
+                                                                            let (parser, empty) = parser.opt_parse::<Empty>();
+                                                                            match empty {
+                                                                                Some(empty) => (parser, Some(Expr::Empty(empty))),
+                                                                                None => (parser, None)
+                                                                            }
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -1703,9 +1751,9 @@ pub mod parse {
                                         right
                                     }))),
                                     None => {
-                                        let (parser, right) = parser.opt_parse::<InfixApRight>();
+                                        let (parser, right) = parser.opt_parse::<BinaryApRight>();
                                         match right {
-                                            Some(right) => Ok((parser, Expr::InfixAp(InfixAp {
+                                            Some(right) => Ok((parser, Expr::BinaryAp(BinaryAp {
                                                 left: Box::new(left),
                                                 right
                                             }))),
@@ -1815,29 +1863,95 @@ pub mod parse {
             }
         }
 
-        impl<'a> Parse for PrimitiveOp<'a> {
+        impl<'a> Parse for BinaryOp<'a> {
             type Error = Error;
             type Token = Result<lexer::Token<'a>, lexer::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, add) = parser.opt_parse::<primitive::Add>();
-                match add {
-                    Some(add) => Ok((parser, PrimitiveOp::Plus(add))),
+                let (parser, mul) = parser.opt_parse::<primitive::Mul>();
+                match mul {
+                    Some(mul) => Ok((parser, BinaryOp::Multiplied(mul))),
                     None => {
-                        let (parser, sub) = parser.opt_parse::<primitive::Sub>();
-                        match sub {
-                            Some(sub) => Ok((parser, PrimitiveOp::Minus(sub))),
+                        let (parser, div) = parser.opt_parse::<primitive::Div>();
+                        match div {
+                            Some(div) => Ok((parser, BinaryOp::Divided(div))),
                             None => {
-                                let (parser, mul) = parser.opt_parse::<primitive::Mul>();
-                                match mul {
-                                    Some(mul) => Ok((parser, PrimitiveOp::Multiplied(mul))),
+                                let (parser, add) = parser.opt_parse::<primitive::Add>();
+                                match add {
+                                    Some(add) => Ok((parser, BinaryOp::Plus(add))),
                                     None => {
-                                        let (parser, div) = parser.opt_parse::<primitive::Div>();
-                                        match div {
-                                            Some(div) => Ok((parser, PrimitiveOp::Divided(div))),
+                                        let (parser, sub) = parser.opt_parse::<primitive::Sub>();
+                                        match sub {
+                                            Some(sub) => Ok((parser, BinaryOp::Minus(sub))),
                                             None => {
-                                                let (parser, mod0) = parser.parse::<primitive::Mod>()?;
-                                                Ok((parser, PrimitiveOp::Modulo(mod0)))
+                                                let (parser, mod0) = parser.opt_parse::<primitive::Mod>();
+                                                match mod0 {
+                                                    Some(mod0) => Ok((parser, BinaryOp::Modulo(mod0))),
+                                                    None => {
+                                                        let (parser, and) = parser.opt_parse::<primitive::AndAnd>();
+                                                        match and {
+                                                            Some(and) => Ok((parser, BinaryOp::And(and))),
+                                                            None => {
+                                                                let (parser, or) = parser.opt_parse::<primitive::OrOr>();
+                                                                match or {
+                                                                    Some(or) => Ok((parser, BinaryOp::Or(or))),
+                                                                    None => {
+                                                                        let (parser, bit_and) = parser.opt_parse::<primitive::And>();
+                                                                        match bit_and {
+                                                                            Some(bit_and) => Ok((parser, BinaryOp::BitAnd(bit_and))),
+                                                                            None => {
+                                                                                let (parser, bit_or) = parser.opt_parse::<primitive::Or>();
+                                                                                match bit_or {
+                                                                                    Some(bit_or) => Ok((parser, BinaryOp::BitOr(bit_or))),
+                                                                                    None => {
+                                                                                        let (parser, bit_xor) = parser.opt_parse::<primitive::Xor>();
+                                                                                        match bit_xor {
+                                                                                            Some(bit_xor) => Ok((parser, BinaryOp::BitXor(bit_xor))),
+                                                                                            None => {
+                                                                                                let (parser, eq) = parser.opt_parse::<primitive::EqEq>();
+                                                                                                match eq {
+                                                                                                    Some(eq) => Ok((parser, BinaryOp::Eq(eq))),
+                                                                                                    None => {
+                                                                                                        let (parser, ne) = parser.opt_parse::<primitive::Ne>();
+                                                                                                        match ne {
+                                                                                                            Some(ne) => Ok((parser, BinaryOp::Ne(ne))),
+                                                                                                            None => {
+                                                                                                                let (parser, le) = parser.opt_parse::<primitive::Le>();
+                                                                                                                match le {
+                                                                                                                    Some(le) => Ok((parser, BinaryOp::Le(le))),
+                                                                                                                    None => {
+                                                                                                                        let (parser, ge) = parser.opt_parse::<primitive::Ge>();
+                                                                                                                        match ge {
+                                                                                                                            Some(ge) => Ok((parser, BinaryOp::Ge(ge))),
+                                                                                                                            None => {
+                                                                                                                                let (parser, lt) = parser.opt_parse::<primitive::Lt>();
+                                                                                                                                match lt {
+                                                                                                                                    Some(lt) => Ok((parser, BinaryOp::Lt(lt))),
+                                                                                                                                    None => {
+                                                                                                                                        let (parser, gt) = parser.parse::<primitive::Gt>()?;
+                                                                                                                                        Ok((parser, BinaryOp::Gt(gt)))
+                                                                                                                                    }
+                                                                                                                                }
+                                                                                                                            }
+                                                                                                                        }
+                                                                                                                    }
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1849,18 +1963,49 @@ pub mod parse {
             }
         }
 
-        impl<'a> Parse for InfixApRight<'a> {
+        impl<'a> Parse for BinaryApRight<'a> {
             type Error = Error;
             type Token = Result<lexer::Token<'a>, lexer::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, primitive_op) = parser.parse::<PrimitiveOp>()?;
+                let (parser, primitive_op) = parser.parse::<BinaryOp>()?;
                 let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
                 let (parser, right) = parser.parse::<Expr>()?;
-                Ok((parser, InfixApRight {
+                Ok((parser, BinaryApRight {
                     op: primitive_op,
                     right: Box::new(right)
                 }))
+            }
+        }
+
+        impl<'a> Parse for UnaryAp<'a> {
+            type Error = Error;
+            type Token = Result<lexer::Token<'a>, lexer::Error>;
+
+            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                let (parser, op) = parser.parse::<UnaryOp>()?;
+                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, right) = parser.parse::<Expr>()?;
+                Ok((parser, UnaryAp {
+                    op,
+                    right: Box::new(right)
+                }))
+            }
+        }
+
+        impl<'a> Parse for UnaryOp<'a> {
+            type Error = Error;
+            type Token = Result<lexer::Token<'a>, lexer::Error>;
+
+            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                let (parser, sub) = parser.opt_parse::<primitive::Sub>();
+                match sub {
+                    Some(sub) => Ok((parser, UnaryOp::Neg(sub))),
+                    None => {
+                        let (parser, bang) = parser.parse::<primitive::Bang>()?;
+                        Ok((parser, UnaryOp::Not(bang)))
+                    }
+                }
             }
         }
 
