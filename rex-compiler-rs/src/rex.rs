@@ -1484,7 +1484,6 @@ pub mod parse {
         use crate::parser::{Parse, Parser};
         use crate::rex::lexer;
         use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
-        use crate::rex::parse::primitive::{Empty, Lit};
 
         impl From<lexer::Error> for Error {
             fn from(err: lexer::Error) -> Self {
@@ -1711,7 +1710,7 @@ pub mod parse {
                                                                     match node {
                                                                         Some(node) => (parser, Some(Expr::Node(node))),
                                                                         None => {
-                                                                            let (parser, empty) = parser.opt_parse::<Empty>();
+                                                                            let (parser, empty) = parser.opt_parse::<primitive::Empty>();
                                                                             match empty {
                                                                                 Some(empty) => (parser, Some(Expr::Empty(empty))),
                                                                                 None => (parser, None)
@@ -1972,8 +1971,6 @@ pub mod parse {
                 let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
                 let (parser, right) = parser.parse::<Expr>()?;
 
-                let x = - 5 + 4;
-
                 Ok((parser, BinaryApRight {
                     op: primitive_op,
                     right: Box::new(right)
@@ -1991,15 +1988,15 @@ pub mod parse {
                 // Parse expressions that are directly next to the unary op to lift them up in the parse tree
                 let (parser, lit) = parser.opt_parse::<primitive::LitInt>();
                 let (parser, right) = match lit {
-                    Some(lit) => (parser, Expr::Lit(Lit::Int(lit))),
+                    Some(lit) => (parser, Expr::Lit(primitive::Lit::Int(lit))),
                     None => {
                         let (parser, lit) = parser.opt_parse::<primitive::LitFloat>();
                         match lit {
-                            Some(lit) => (parser, Expr::Lit(Lit::Float(lit))),
+                            Some(lit) => (parser, Expr::Lit(primitive::Lit::Float(lit))),
                             None => {
                                 let (parser, lit) = parser.opt_parse::<primitive::LitBool>();
                                 match lit {
-                                    Some(lit) => (parser, Expr::Lit(Lit::Bool(lit))),
+                                    Some(lit) => (parser, Expr::Lit(primitive::Lit::Bool(lit))),
                                     None => {
                                         let (parser, var) = parser.opt_parse::<Var>();
                                         match var {
