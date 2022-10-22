@@ -3,7 +3,7 @@
         if true {
             "hallo"
         } else {
-            name()
+            - 657.76 + 435345
         }
     }
 </test>

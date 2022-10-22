@@ -1484,7 +1484,7 @@ pub mod parse {
         use crate::parser::{Parse, Parser};
         use crate::rex::lexer;
         use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
-        use crate::rex::parse::primitive::Empty;
+        use crate::rex::parse::primitive::{Empty, Lit};
 
         impl From<lexer::Error> for Error {
             fn from(err: lexer::Error) -> Self {
@@ -1971,6 +1971,9 @@ pub mod parse {
                 let (parser, primitive_op) = parser.parse::<BinaryOp>()?;
                 let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
                 let (parser, right) = parser.parse::<Expr>()?;
+
+                let x = - 5 + 4;
+
                 Ok((parser, BinaryApRight {
                     op: primitive_op,
                     right: Box::new(right)
@@ -1985,7 +1988,39 @@ pub mod parse {
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, op) = parser.parse::<UnaryOp>()?;
                 let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                let (parser, right) = parser.parse::<Expr>()?;
+                // Parse expressions that are directly next to the unary op to lift them up in the parse tree
+                let (parser, lit) = parser.opt_parse::<primitive::LitInt>();
+                let (parser, right) = match lit {
+                    Some(lit) => (parser, Expr::Lit(Lit::Int(lit))),
+                    None => {
+                        let (parser, lit) = parser.opt_parse::<primitive::LitFloat>();
+                        match lit {
+                            Some(lit) => (parser, Expr::Lit(Lit::Float(lit))),
+                            None => {
+                                let (parser, lit) = parser.opt_parse::<primitive::LitBool>();
+                                match lit {
+                                    Some(lit) => (parser, Expr::Lit(Lit::Bool(lit))),
+                                    None => {
+                                        let (parser, var) = parser.opt_parse::<Var>();
+                                        match var {
+                                            Some(var) => (parser, Expr::Var(var)),
+                                            None => {
+                                                let (parser, group) = parser.opt_parse::<Group<Expr>>();
+                                                match group {
+                                                    Some(group) => (parser, Expr::Group(group)),
+                                                    None => {
+                                                        let (parser, expr) = parser.parse::<Expr>()?;
+                                                        (parser, expr)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
                 Ok((parser, UnaryAp {
                     op,
                     right: Box::new(right)
