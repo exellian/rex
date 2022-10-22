@@ -1,0 +1,14 @@
+// Helper 
+// ns'...' : non sensitive to case
+// [x] : x is optional 
+// | : or 
+// + : one or more
+// * : zero or more
+
+ASCII_WHITESPACE :== (U+0009 TAB) | (U+000A LF) | (U+000C FF) | (U+000D CR) | (U+0020 SPACE)
+
+COMMENT_AND_WHITESPACE :== COMMENT* ASCII_WHITESPACE*
+
+DOCUMENT :== [U+FEFF] COMMENT_AND_WHITESPACE DOCTYPE COMMENT_AND_WHITESPACE HTML_ELEMENT COMMENT_AND_WHITESPACE
+
+DOCTYPE :== ns'<!DOCTYPE' ASCII_WHITESPACE+ 

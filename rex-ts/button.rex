@@ -1,0 +1,1 @@
+<div class={ if accent { "accent" } else { "" } }>{ props.name }</div>
