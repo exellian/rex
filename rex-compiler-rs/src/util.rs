@@ -6,9 +6,15 @@ pub struct Span<'a> {
     range: Range<usize>
 }
 
+#[derive(Clone, Debug)]
+pub struct SpanOwned {
+    value: String,
+    range: Range<usize>
+}
+
 mod implementation {
     use std::ops::Range;
-    use crate::util::Span;
+    use crate::util::{Span, SpanOwned};
 
     impl<'a> Span<'a> {
 
@@ -21,6 +27,13 @@ mod implementation {
 
         pub fn value(&self) -> &str {
             &self.code[self.range.clone()]
+        }
+
+        pub fn owned(&self) -> SpanOwned {
+            SpanOwned {
+                value: self.value().to_string(),
+                range: self.range.clone()
+            }
         }
     }
 }

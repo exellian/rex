@@ -1,7 +1,9 @@
 <test>
     {
-        for x in products {
-            <div>
+        if true {
+            "hallo"
+        } else {
+            name()
         }
     }
 </test>

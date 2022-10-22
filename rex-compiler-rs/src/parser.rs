@@ -65,6 +65,10 @@ mod implementation {
             next.is_none()
         }
 
+        pub fn next(&mut self) -> Option<C::Item> {
+            self.cursor.next()
+        }
+
         pub fn peek(&mut self) -> Option<&C::Item> {
             self.cursor.peek()
         }

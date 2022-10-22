@@ -92,6 +92,22 @@ pub mod lexer {
             Text
         }
 
+        impl<'a> Token<'a> {
+
+            pub fn span(&self) -> Span<'a> {
+                match self {
+                    Token::Punct(punct) => punct.span.clone(),
+                    Token::Text(text) => text.span.clone(),
+                    Token::Literal(lit) => match lit {
+                        Literal::Str(str) => str.span.clone(),
+                        Literal::Int(i) => i.span.clone(),
+                        Literal::Float(f) => f.span.clone()
+                    }
+                    Token::Whitespace(ws) => ws.span.clone()
+                }
+            }
+        }
+
         impl<'a> parser::Token for Punct<'a> {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
@@ -473,11 +489,13 @@ pub mod parse {
     use crate::rex::lexer;
     use crate::rex::lexer::Text;
     use crate::rex::parse::primitive::Empty;
+    use crate::util::{Span, SpanOwned};
 
     #[derive(Debug)]
     pub enum Error {
         Lexer(lexer::Error),
-        UnexpectedToken
+        UnexpectedToken(SpanOwned),
+        UnexpectedEof
     }
 
     mod primitive {
@@ -684,7 +702,7 @@ pub mod parse {
                             text
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(text.span.owned()))
                     }
                 }
             }
@@ -700,7 +718,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -716,7 +734,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -732,7 +750,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -748,7 +766,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -764,7 +782,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -780,7 +798,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -796,7 +814,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -812,7 +830,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -828,7 +846,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -844,7 +862,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -860,7 +878,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -876,7 +894,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -892,7 +910,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -908,7 +926,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -926,7 +944,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -944,7 +962,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -960,7 +978,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -978,7 +996,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -994,7 +1012,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -1012,7 +1030,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -1028,7 +1046,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -1046,7 +1064,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -1064,7 +1082,7 @@ pub mod parse {
                             punct1
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct0.span.owned()))
                     }
                 }
             }
@@ -1080,7 +1098,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -1096,7 +1114,7 @@ pub mod parse {
                             punct
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(punct.span.owned()))
                     }
                 }
             }
@@ -1112,7 +1130,7 @@ pub mod parse {
                             text
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(text.span.owned()))
                     }
                 }
             }
@@ -1128,7 +1146,7 @@ pub mod parse {
                             text
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(text.span.owned()))
                     }
                 }
             }
@@ -1144,7 +1162,7 @@ pub mod parse {
                             text
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(text.span.owned()))
                     }
                 }
             }
@@ -1160,7 +1178,7 @@ pub mod parse {
                             text
                         }))
                     } else {
-                        Err(Error::UnexpectedToken)
+                        Err(Error::UnexpectedToken(text.span.owned()))
                     }
                 }
             }
@@ -1242,7 +1260,7 @@ pub mod parse {
                     let value = match text.span.value() {
                         "true" => true,
                         "false" => false,
-                        _ => return Err(Error::UnexpectedToken)
+                        _ => return Err(Error::UnexpectedToken(text.span.owned()))
                     };
                     Ok((parser, LitBool {
                         text,
@@ -1380,10 +1398,12 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct Ap<'a> {
-        op: primitive::Ident<'a>,
-        left: primitive::ParenLeft<'a>,
-        terms: Punctuated<'a, Expr<'a>, primitive::Comma<'a>>,
-        right: primitive::ParenRight<'a>,
+        expr: Box<Expr<'a>>,
+        right: ApRight<'a>
+    }
+    #[derive(Debug)]
+    pub struct ApRight<'a> {
+        group: Group<'a, Punctuated<'a, Expr<'a>, primitive::Comma<'a>>>
     }
     #[derive(Debug)]
     pub struct Punctuated<'a, P, S> {
@@ -1421,7 +1441,7 @@ pub mod parse {
         use crate::cursor::Cursor;
         use crate::parser::{Parse, Parser};
         use crate::rex::lexer;
-        use crate::rex::parse::{Ap, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, InfixAp, InfixApRight, NamedSelector, Node, NodeOrBlock, primitive, PrimitiveOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View};
+        use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, InfixAp, InfixApRight, NamedSelector, Node, NodeOrBlock, primitive, PrimitiveOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View};
         use crate::rex::parse::primitive::Empty;
 
         impl From<lexer::Error> for Error {
@@ -1439,7 +1459,8 @@ pub mod parse {
                 let (parser, root) = parser.opt_parse::<NodeOrBlock>();
                 let (mut parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
                 return if !parser.finished() {
-                    Err(Error::UnexpectedToken)
+                    let next = parser.next().unwrap()?;
+                    Err(Error::UnexpectedToken(next.span().owned()))
                 } else {
                     Ok((parser, View {
                         root
@@ -1616,44 +1637,38 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lexer::Token<'a>, lexer::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let left = {
+            fn parse<C: Cursor<Item=Self::Token>>(mut parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                let (mut parser, left) = {
                     let (parser, if0) = parser.opt_parse::<If>();
                     match if0 {
-                        Some(if0) => Some((parser, Expr::If(if0))),
+                        Some(if0) => (parser, Some(Expr::If(if0))),
                         None => {
                             let (parser, for0) = parser.opt_parse::<For>();
                             match for0 {
                                 Some(for0) => {
-                                    Some((parser, Expr::For(for0)))
+                                    (parser, Some(Expr::For(for0)))
                                 },
                                 None => {
                                     let (parser, lit) = parser.opt_parse::<primitive::Lit>();
                                     match lit {
-                                        Some(lit) => Some((parser, Expr::Lit(lit))),
+                                        Some(lit) => (parser, Some(Expr::Lit(lit))),
                                         None => {
                                             let (parser, group) = parser.opt_parse::<Group<Expr>>();
                                             match group {
-                                                Some(group) => Some((parser, Expr::Group(group))),
+                                                Some(group) => (parser, Some(Expr::Group(group))),
                                                 None => {
                                                     let (parser, var) = parser.opt_parse::<Var>();
                                                     match var {
-                                                        Some(var) => Some((parser, Expr::Var(var))),
+                                                        Some(var) => (parser, Some(Expr::Var(var))),
                                                         None => {
-                                                            let (parser, ap) = parser.opt_parse::<Ap>();
-                                                            match ap {
-                                                                Some(ap) => Some((parser, Expr::Ap(ap))),
+                                                            let (parser, node) = parser.opt_parse::<Node>();
+                                                            match node {
+                                                                Some(node) => (parser, Some(Expr::Node(node))),
                                                                 None => {
-                                                                    let (parser, node) = parser.opt_parse::<Node>();
-                                                                    match node {
-                                                                        Some(node) => Some((parser, Expr::Node(node))),
-                                                                        None => {
-                                                                            let (parser, empty) = parser.opt_parse::<Empty>();
-                                                                            match empty {
-                                                                                Some(empty) => Some((parser, Expr::Empty(empty))),
-                                                                                None => None
-                                                                            }
-                                                                        }
+                                                                    let (parser, empty) = parser.opt_parse::<Empty>();
+                                                                    match empty {
+                                                                        Some(empty) => (parser, Some(Expr::Empty(empty))),
+                                                                        None => (parser, None)
                                                                     }
                                                                 }
                                                             }
@@ -1672,27 +1687,39 @@ pub mod parse {
                 // SelectorAp :== Expr . Ident
                 // InfixAp :== Expr PrimitiveOp Expr
                 match left {
-                    Some((parser, left)) => {
+                    Some(left) => {
                         let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                        let (parser, right) = parser.opt_parse::<SelectorApRight>();
+                        let (parser, right) = parser.opt_parse::<ApRight>();
                         match right {
-                            Some(right) => Ok((parser, Expr::SelectorAp(SelectorAp {
+                            Some(right) => Ok((parser, Expr::Ap(Ap {
                                 expr: Box::new(left),
                                 right
                             }))),
                             None => {
-                                let (parser, right) = parser.opt_parse::<InfixApRight>();
+                                let (parser, right) = parser.opt_parse::<SelectorApRight>();
                                 match right {
-                                    Some(right) => Ok((parser, Expr::InfixAp(InfixAp {
-                                        left: Box::new(left),
+                                    Some(right) => Ok((parser, Expr::SelectorAp(SelectorAp {
+                                        expr: Box::new(left),
                                         right
                                     }))),
-                                    None => Ok((parser, left))
+                                    None => {
+                                        let (parser, right) = parser.opt_parse::<InfixApRight>();
+                                        match right {
+                                            Some(right) => Ok((parser, Expr::InfixAp(InfixAp {
+                                                left: Box::new(left),
+                                                right
+                                            }))),
+                                            None => Ok((parser, left))
+                                        }
+                                    }
                                 }
                             }
                         }
                     },
-                    None => Err(Error::UnexpectedToken)
+                    None => match parser.next() {
+                        Some(next) => Err(Error::UnexpectedToken(next?.span().owned())),
+                        None => Err(Error::UnexpectedEof)
+                    }
                 }
             }
         }
@@ -1901,23 +1928,14 @@ pub mod parse {
             }
         }
 
-        impl<'a> Parse for Ap<'a> {
+        impl<'a> Parse for ApRight<'a> {
             type Error = Error;
             type Token = Result<lexer::Token<'a>, lexer::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, op) = parser.parse::<primitive::Ident>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                let (parser, left) = parser.parse::<primitive::ParenLeft>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                let (parser, terms) = parser.parse::<Punctuated<Expr, primitive::Comma>>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                let (parser, right) = parser.parse::<primitive::ParenRight>()?;
-                Ok((parser, Ap {
-                    op,
-                    left,
-                    terms,
-                    right
+                let (parser, group) = parser.parse::<Group<Punctuated<Expr, primitive::Comma>>>()?;
+                Ok((parser, ApRight {
+                    group
                 }))
             }
         }
