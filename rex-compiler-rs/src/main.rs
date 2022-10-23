@@ -8,7 +8,7 @@ mod rex;
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
-    let mut lexer = rex::lexer::Lexer::new(code);
+    let mut lexer = rex::lex::Lexer::new(code);
 
 /*
     let mut tokens = vec![];
@@ -19,7 +19,8 @@ fn main() {
             None => break
         }
     }
-    println!("{:?}", tokens);*/
+    println!("{:?}", tokens);
+*/
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();

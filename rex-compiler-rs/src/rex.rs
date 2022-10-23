@@ -1,4 +1,4 @@
-pub mod lexer {
+pub mod lex {
     use crate::cursor::CharCursor;
     use crate::util::Span;
 
@@ -72,7 +72,7 @@ pub mod lexer {
     mod implementation {
         use crate::cursor::{CharCursor, Cursor};
         use crate::parser;
-        use crate::rex::lexer::{Error, FloatLiteral, IntLiteral, Lexer, Literal, Punct, StringDelimiter, StrLiteral, Text, Token, Whitespace};
+        use crate::rex::lex::{Error, FloatLiteral, IntLiteral, Lexer, Literal, Punct, StringDelimiter, StrLiteral, Text, Token, Whitespace};
         use crate::util::Span;
 
         struct StrLiteralContext {
@@ -486,21 +486,23 @@ pub mod lexer {
 
 pub mod parse {
     use std::marker::PhantomData;
-    use crate::rex::lexer;
-    use crate::rex::lexer::Text;
+    use crate::rex::lex;
+    use crate::rex::lex::Text;
     use crate::rex::parse::primitive::Empty;
+    use crate::rex::parse::typ::Type;
     use crate::util::{Span, SpanOwned};
 
     #[derive(Debug)]
     pub enum Error {
-        Lexer(lexer::Error),
+        Lexer(lex::Error),
         UnexpectedToken(SpanOwned),
-        UnexpectedEof
+        UnexpectedEof,
+        TypeError(Type, Type)
     }
 
     mod primitive {
         use std::marker::PhantomData;
-        use crate::rex::lexer::{FloatLiteral, IntLiteral, Punct, StrLiteral, Text};
+        use crate::rex::lex::{FloatLiteral, IntLiteral, Punct, StrLiteral, Text};
 
         #[derive(Debug)]
         pub struct Ident<'a> {
@@ -668,8 +670,8 @@ pub mod parse {
             use std::marker::PhantomData;
             use crate::cursor::Cursor;
             use crate::parser::{Parse, Parser};
-            use crate::rex::lexer;
-            use crate::rex::lexer::Lexer;
+            use crate::rex::lex;
+            use crate::rex::lex::Lexer;
             use crate::rex::parse::Error;
             use crate::rex::parse::primitive::{Add, And, AndAnd, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma, Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Bang, Or, OrOr, ParenLeft, ParenRight, Sub, Xor};
 
@@ -696,10 +698,10 @@ pub mod parse {
 
             impl<'a> Parse for Ident<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     let value = text.span.value();
                     return if !is_keyword(value) && check_chars(value, is_ident_char) {
                         Ok((parser, Ident {
@@ -713,10 +715,10 @@ pub mod parse {
 
             impl<'a> Parse for BracketLeft<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACKET_LEFT {
                         Ok((parser, BracketLeft {
                             punct
@@ -729,10 +731,10 @@ pub mod parse {
 
             impl<'a> Parse for BracketRight<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACKET_RIGHT {
                         Ok((parser, BracketRight {
                             punct
@@ -745,10 +747,10 @@ pub mod parse {
 
             impl<'a> Parse for BraceLeft<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACE_LEFT {
                         Ok((parser, BraceLeft {
                             punct
@@ -761,10 +763,10 @@ pub mod parse {
 
             impl<'a> Parse for BraceRight<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACE_RIGHT {
                         Ok((parser, BraceRight {
                             punct
@@ -777,10 +779,10 @@ pub mod parse {
 
             impl<'a> Parse for ParenLeft<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PAREN_LEFT {
                         Ok((parser, ParenLeft {
                             punct
@@ -793,10 +795,10 @@ pub mod parse {
 
             impl<'a> Parse for ParenRight<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PAREN_RIGHT {
                         Ok((parser, ParenRight {
                             punct
@@ -809,10 +811,10 @@ pub mod parse {
 
             impl<'a> Parse for Add<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PLUS {
                         Ok((parser, Add {
                             punct
@@ -825,10 +827,10 @@ pub mod parse {
 
             impl<'a> Parse for Sub<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MINUS {
                         Ok((parser, Sub {
                             punct
@@ -841,10 +843,10 @@ pub mod parse {
 
             impl<'a> Parse for Mul<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MUL {
                         Ok((parser, Mul {
                             punct
@@ -857,10 +859,10 @@ pub mod parse {
 
             impl<'a> Parse for Div<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::DIV {
                         Ok((parser, Div {
                             punct
@@ -873,10 +875,10 @@ pub mod parse {
 
             impl<'a> Parse for Mod<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MOD {
                         Ok((parser, Mod {
                             punct
@@ -889,10 +891,10 @@ pub mod parse {
 
             impl<'a> Parse for Bang<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::NEG {
                         Ok((parser, Bang {
                             punct
@@ -905,10 +907,10 @@ pub mod parse {
 
             impl<'a> Parse for Lt<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::LT {
                         Ok((parser, Lt {
                             punct
@@ -921,10 +923,10 @@ pub mod parse {
 
             impl<'a> Parse for Gt<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::GT {
                         Ok((parser, Gt {
                             punct
@@ -937,11 +939,11 @@ pub mod parse {
 
             impl<'a> Parse for Le<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::LT && punct1.ch == Lexer::EQ {
                         Ok((parser, Le {
                             punct0,
@@ -955,11 +957,11 @@ pub mod parse {
 
             impl<'a> Parse for Ge<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::GT && punct1.ch == Lexer::EQ {
                         Ok((parser, Ge {
                             punct0,
@@ -973,10 +975,10 @@ pub mod parse {
 
             impl<'a> Parse for And<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::AND {
                         Ok((parser, And {
                             punct
@@ -989,11 +991,11 @@ pub mod parse {
 
             impl<'a> Parse for AndAnd<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::AND && punct1.ch == Lexer::AND {
                         Ok((parser, AndAnd {
                             punct0,
@@ -1007,10 +1009,10 @@ pub mod parse {
 
             impl<'a> Parse for Or<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::OR {
                         Ok((parser, Or {
                             punct
@@ -1023,11 +1025,11 @@ pub mod parse {
 
             impl<'a> Parse for OrOr<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::OR && punct1.ch == Lexer::OR {
                         Ok((parser, OrOr {
                             punct0,
@@ -1041,10 +1043,10 @@ pub mod parse {
 
             impl<'a> Parse for Xor<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::XOR {
                         Ok((parser, Xor {
                             punct
@@ -1057,10 +1059,10 @@ pub mod parse {
 
             impl<'a> Parse for Eq<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::EQ {
                         Ok((parser, Eq {
                             punct
@@ -1073,11 +1075,11 @@ pub mod parse {
 
             impl<'a> Parse for EqEq<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::EQ && punct1.ch == Lexer::EQ {
                         Ok((parser, EqEq {
                             punct0,
@@ -1091,11 +1093,11 @@ pub mod parse {
 
             impl<'a> Parse for Ne<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct0) = parser.parse_token::<lexer::Punct>()?;
-                    let (parser, punct1) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
+                    let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::NEG && punct1.ch == Lexer::EQ {
                         Ok((parser, Ne {
                             punct0,
@@ -1109,10 +1111,10 @@ pub mod parse {
 
             impl<'a> Parse for Comma<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::COMMA {
                         Ok((parser, Comma {
                             punct
@@ -1125,10 +1127,10 @@ pub mod parse {
 
             impl<'a> Parse for Dot<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, punct) = parser.parse_token::<lexer::Punct>()?;
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::DOT {
                         Ok((parser, Dot {
                             punct
@@ -1141,10 +1143,10 @@ pub mod parse {
 
             impl<'a> Parse for If<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "if" {
                         Ok((parser, If {
                             text
@@ -1157,10 +1159,10 @@ pub mod parse {
 
             impl<'a> Parse for Else<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "else" {
                         Ok((parser, Else {
                             text
@@ -1173,10 +1175,10 @@ pub mod parse {
 
             impl<'a> Parse for For<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "for" {
                         Ok((parser, For {
                             text
@@ -1189,10 +1191,10 @@ pub mod parse {
 
             impl<'a> Parse for In<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "in" {
                         Ok((parser, In {
                             text
@@ -1205,7 +1207,7 @@ pub mod parse {
 
             impl<'a> Parse for Lit<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, lit_str) = parser.opt_parse::<LitStr>();
@@ -1233,10 +1235,10 @@ pub mod parse {
 
             impl<'a> Parse for LitStr<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, lit) = parser.parse_token::<lexer::StrLiteral>()?;
+                    let (parser, lit) = parser.parse_token::<lex::StrLiteral>()?;
                     Ok((parser, LitStr {
                         lit
                     }))
@@ -1245,10 +1247,10 @@ pub mod parse {
 
             impl<'a> Parse for LitInt<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, lit) = parser.parse_token::<lexer::IntLiteral>()?;
+                    let (parser, lit) = parser.parse_token::<lex::IntLiteral>()?;
                     let value = lit.span.value().parse::<usize>().unwrap();
                     Ok((parser, LitInt {
                         lit,
@@ -1259,10 +1261,10 @@ pub mod parse {
 
             impl<'a> Parse for LitFloat<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, lit) = parser.parse_token::<lexer::FloatLiteral>()?;
+                    let (parser, lit) = parser.parse_token::<lex::FloatLiteral>()?;
                     let value = lit.span.value().parse::<f64>().unwrap();
                     Ok((parser, LitFloat {
                         lit,
@@ -1273,10 +1275,10 @@ pub mod parse {
 
             impl<'a> Parse for LitBool<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                    let (parser, text) = parser.parse_token::<lex::Text>()?;
                     let value = match text.span.value() {
                         "true" => true,
                         "false" => false,
@@ -1292,7 +1294,7 @@ pub mod parse {
 
             impl<'a> Parse for Empty<'a> {
                 type Error = Error;
-                type Token = Result<lexer::Token<'a>, lexer::Error>;
+                type Token = Result<lex::Token<'a>, lex::Error>;
 
                 fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                     Ok((parser, Empty {
@@ -1381,6 +1383,7 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct BinaryAp<'a> {
+        typ: Type,
         left: Box<Expr<'a>>,
         right: BinaryApRight<'a>
     }
@@ -1410,6 +1413,7 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct UnaryAp<'a> {
+        typ: Type,
         op: UnaryOp<'a>,
         right: Box<Expr<'a>>
     }
@@ -1420,6 +1424,7 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct If<'a> {
+        typ: Type,
         if0: primitive::If<'a>,
         condition: Box<Expr<'a>>,
         then_branch: Block<'a>,
@@ -1428,6 +1433,7 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct For<'a> {
+        typ: Type,
         for0: primitive::For<'a>,
         binding: Var<'a>,
         in0: primitive::In<'a>,
@@ -1436,10 +1442,12 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct Var<'a> {
+        typ: Type,
         name: primitive::Ident<'a>
     }
     #[derive(Debug)]
     pub struct Ap<'a> {
+        typ: Type,
         expr: Box<Expr<'a>>,
         right: ApRight<'a>
     }
@@ -1455,6 +1463,7 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct SelectorAp<'a> {
+        typ: Type,
         expr: Box<Expr<'a>>,
         right: SelectorApRight<'a>
     }
@@ -1479,26 +1488,120 @@ pub mod parse {
         right: primitive::BracketRight<'a>
     }
 
+    pub mod typ {
+        use crate::rex::parse::Expr;
+        use crate::rex::parse::primitive::Lit;
+
+        #[derive(Copy, Clone, Debug, PartialEq)]
+        pub enum Type {
+            Any,
+            Unit,
+            Array,
+            Object,
+            String,
+            Int,
+            Float,
+            Bool,
+            HtmlElement
+        }
+
+        impl Type {
+
+            #[inline]
+            pub fn eq_or_any(&self, other: &Self) -> bool {
+                *self == *other || *self == Type::Any || *other == Type::Any
+            }
+        }
+
+        impl<'a> Expr<'a> {
+
+            #[inline]
+            pub fn typ(&self) -> Type {
+                match self {
+                    Expr::If(if0) => if0.typ,
+                    Expr::For(for0) => for0.typ,
+                    Expr::UnaryAp(un_ap) => un_ap.typ,
+                    Expr::Lit(lit) => match lit {
+                        Lit::Str(_) => Type::String,
+                        Lit::Int(_) => Type::Int,
+                        Lit::Float(_) => Type::Float,
+                        Lit::Bool(_) => Type::Bool
+                    },
+                    Expr::Var(var) => var.typ,
+                    Expr::Node(_) => Type::HtmlElement,
+                    Expr::Empty(_) => Type::Unit,
+                    Expr::Group(group) => group.expr.typ(),
+                    Expr::BinaryAp(bin_ap) => bin_ap.typ,
+                    Expr::SelectorAp(sel_ap) => sel_ap.typ,
+                    Expr::Ap(ap) => ap.typ
+                }
+            }
+
+            #[inline]
+            pub fn infer(&mut self, typ: Type) {
+                if typ == Type::Any {
+                    return;
+                }
+                match self {
+                    Expr::If(if0) => {
+                        if0.typ = typ;
+                        if0.then_branch.expr.infer(typ);
+                        for (_, _, _, block) in &mut if0.elseif_branches {
+                            block.expr.infer(typ);
+                        }
+                        if0.else_branch.1.expr.infer(typ);
+                    },
+                    Expr::For(for0) => {
+                        for0.typ = typ;
+                        for0.block.expr.infer(typ);
+                    }
+                    Expr::UnaryAp(un_ap) => {
+                        un_ap.typ = typ;
+                        un_ap.right.infer(typ);
+                    }
+                    Expr::Lit(_) =>
+                        panic!("Can't infer type for literal!"),
+                    Expr::Var(var) => var.typ = typ,
+                    Expr::Node(_) => panic!("Can't infer type for node!"),
+                    Expr::Empty(_) => panic!("Can't infer type for empty expression!"),
+                    Expr::Group(group) => {
+                        group.expr.infer(typ);
+                    }
+                    Expr::BinaryAp(bin_ap) => {
+                        bin_ap.typ = typ;
+                        bin_ap.left.infer(typ);
+                        bin_ap.right.right.infer(typ);
+                    }
+                    Expr::SelectorAp(sel) => {
+                        sel.typ = typ;
+                    }
+                    Expr::Ap(ap) => ap.typ = typ
+                }
+            }
+        }
+    }
+
     mod implementation {
         use crate::cursor::Cursor;
         use crate::parser::{Parse, Parser};
-        use crate::rex::lexer;
+        use crate::rex::lex;
         use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
+        use crate::rex::parse::typ::Type;
 
-        impl From<lexer::Error> for Error {
-            fn from(err: lexer::Error) -> Self {
+        impl From<lex::Error> for Error {
+            fn from(err: lex::Error) -> Self {
                 Error::Lexer(err)
             }
         }
 
         impl<'a> Parse for View<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, root) = parser.opt_parse::<NodeOrBlock>();
-                let (mut parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (mut parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 return if !parser.finished() {
                     let next = parser.next().unwrap()?;
                     Err(Error::UnexpectedToken(next.span().owned()))
@@ -1512,7 +1615,7 @@ pub mod parse {
 
         impl<'a> Parse for NodeOrBlock<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, node) = parser.opt_parse::<Node>();
@@ -1528,7 +1631,7 @@ pub mod parse {
 
         impl<'a> Parse for Node<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, tag) = parser.opt_parse::<TagNode>();
@@ -1544,10 +1647,10 @@ pub mod parse {
 
         impl<'a> Parse for TextNode<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, text) = parser.parse_token::<lexer::Text>()?;
+                let (parser, text) = parser.parse_token::<lex::Text>()?;
                 Ok((parser, TextNode {
                     text
                 }))
@@ -1556,14 +1659,14 @@ pub mod parse {
 
         impl<'a> Parse for TagNode<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, lt) = parser.parse::<primitive::Lt>()?;
                 let (mut parser, name) = parser.parse::<primitive::Ident>()?;
                 let mut attributes1 = Vec::new();
                 let (parser, attributes) = loop {
-                    let (parser1, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                    let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
                     let (parser1, attribute) = parser1.opt_parse::<Attribute>();
                     match attribute {
                         Some(attr) => {
@@ -1573,10 +1676,10 @@ pub mod parse {
                         None => break (parser1, attributes1)
                     }
                 };
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, div) = parser.opt_parse::<primitive::Div>();
                 let (parser, gt) = parser.parse::<primitive::Gt>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, block) = parser.opt_parse::<TagBlock>();
                 Ok((parser, TagNode {
                     lt,
@@ -1591,12 +1694,12 @@ pub mod parse {
 
         impl<'a> Parse for TagBlock<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(mut parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let mut children1 = Vec::new();
                 let (parser, children) = loop {
-                    let (parser1, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                    let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
                     let (parser1, child) = parser1.opt_parse::<NodeOrBlock>();
                     match child {
                         Some(nb) => {
@@ -1606,11 +1709,11 @@ pub mod parse {
                         None => break (parser1, children1)
                     }
                 };
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, lt) = parser.parse::<primitive::Lt>()?;
                 let (parser, div) = parser.parse::<primitive::Div>()?;
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, gt) = parser.parse::<primitive::Gt>()?;
                 Ok((parser, TagBlock {
                     children,
@@ -1624,13 +1727,13 @@ pub mod parse {
 
         impl<'a> Parse for Attribute<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, eq) = parser.parse::<primitive::Eq>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, value) = parser.parse::<AttributeValue>()?;
                 Ok((parser, Attribute {
                     name,
@@ -1642,7 +1745,7 @@ pub mod parse {
 
         impl<'a> Parse for AttributeValue<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, lit) = parser.opt_parse::<primitive::LitStr>();
@@ -1658,13 +1761,13 @@ pub mod parse {
 
         impl<'a> Parse for Block<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::BraceLeft>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::BraceRight>()?;
                 Ok((parser, Block {
                     left,
@@ -1676,7 +1779,7 @@ pub mod parse {
 
         impl<'a> Parse for Expr<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(mut parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (mut parser, left) = {
@@ -1734,34 +1837,61 @@ pub mod parse {
                 // SelectorAp :== Expr . Ident
                 // InfixAp :== Expr PrimitiveOp Expr
                 match left {
-                    Some(left) => {
-                        let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                        let (parser, right) = parser.opt_parse::<ApRight>();
-                        match right {
-                            Some(right) => Ok((parser, Expr::Ap(Ap {
-                                expr: Box::new(left),
-                                right
-                            }))),
-                            None => {
-                                let (parser, right) = parser.opt_parse::<SelectorApRight>();
-                                match right {
-                                    Some(right) => Ok((parser, Expr::SelectorAp(SelectorAp {
+                    Some(mut left) => {
+                        let (parser, left) = loop {
+                            let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
+                            let (parser1, right) = parser1.opt_parse::<ApRight>();
+                            match right {
+                                Some(right) => {
+                                    parser = parser1;
+                                    left = Expr::Ap(Ap {
+                                        typ: Type::Any,
                                         expr: Box::new(left),
                                         right
-                                    }))),
-                                    None => {
-                                        let (parser, right) = parser.opt_parse::<BinaryApRight>();
-                                        match right {
-                                            Some(right) => Ok((parser, Expr::BinaryAp(BinaryAp {
-                                                left: Box::new(left),
+                                    });
+                                },
+                                None => {
+                                    let (parser1, right) = parser1.opt_parse::<SelectorApRight>();
+                                    match right {
+                                        Some(right) => {
+                                            parser = parser1;
+                                            left = Expr::SelectorAp(SelectorAp {
+                                                typ: Type::Any,
+                                                expr: Box::new(left),
                                                 right
-                                            }))),
-                                            None => Ok((parser, left))
+                                            });
+                                        },
+                                        None => {
+                                            let (parser1, right) = parser1.opt_parse::<BinaryApRight>();
+                                            match right {
+                                                Some(mut right) => {
+                                                    let left_typ = left.typ();
+                                                    let right_typ = right.right.typ();
+                                                    if left_typ.eq_or_any(&right_typ) {
+                                                        if left_typ == Type::Any {
+                                                            left.infer(right_typ);
+                                                        }
+                                                        if right_typ == Type::Any {
+                                                            right.right.infer(left_typ);
+                                                        }
+                                                        parser = parser1;
+                                                        left = Expr::BinaryAp(BinaryAp {
+                                                            typ: left_typ,
+                                                            left: Box::new(left),
+                                                            right
+                                                        });
+                                                    } else {
+                                                        return Err(Error::TypeError(left_typ, right_typ));
+                                                    }
+                                                },
+                                                None => break (parser1, left)
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
+                        };
+                        Ok((parser, left))
                     },
                     None => match parser.next() {
                         Some(next) => Err(Error::UnexpectedToken(next?.span().owned())),
@@ -1773,39 +1903,61 @@ pub mod parse {
 
         impl<'a> Parse for If<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, if0) = parser.parse::<primitive::If>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, condition) = parser.parse::<Expr>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
-                let (mut parser, then_branch) = parser.parse::<Block>()?;
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
+                let (mut parser, mut then_branch) = parser.parse::<Block>()?;
 
                 let mut elseif_branches = Vec::new();
-                let (parser, elseif_branches, else_branch) = loop {
-                    let (parser1, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, mut elseif_branches, mut else_branch) = loop {
+                    let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
                     let (parser1, else0) = parser1.parse::<primitive::Else>()?;
-                    let (parser1, _) = parser1.opt_parse_token::<lexer::Whitespace>();
+                    let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
                     let (parser1, if0) = parser1.opt_parse::<primitive::If>();
                     match if0 {
                         Some(if0) => {
-                            let (parser1, _) = parser1.opt_parse_token::<lexer::Whitespace>();
+                            let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
                             let (parser1, expr) = parser1.parse::<Expr>()?;
-                            let (parser1, _) = parser1.opt_parse_token::<lexer::Whitespace>();
+                            let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
                             let (parser1, block) = parser1.parse::<Block>()?;
                             elseif_branches.push((else0, if0, Box::new(expr), block));
                             parser = parser1;
                         },
                         None => {
-                            let (parser1, _) = parser1.opt_parse_token::<lexer::Whitespace>();
+                            let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
                             let (parser1, block) = parser1.parse::<Block>()?;
                             break (parser1, elseif_branches, (else0, block))
                         }
                     }
                 };
 
+                // Type check and inference
+                let mut any_expr_mut = Vec::with_capacity(2 + elseif_branches.len());
+                any_expr_mut.push(&mut then_branch.expr);
+                any_expr_mut.push(&mut else_branch.1.expr);
+                for (_, _, _, block) in &mut elseif_branches { any_expr_mut.push(&mut block.expr); }
+                let mut typ = Type::Any;
+                for expr in &any_expr_mut {
+                    let typ1 = expr.typ();
+                    if !typ.eq_or_any(&typ1) {
+                        return Err(Error::TypeError(typ, typ1));
+                    }
+                    if typ == Type::Any && typ1 != Type::Any {
+                        typ = typ1;
+                    }
+                }
+                for expr in any_expr_mut {
+                    if expr.typ() == Type::Any {
+                        expr.infer(typ);
+                    }
+                }
+
                 Ok((parser, If {
+                    typ,
                     if0,
                     condition: Box::new(condition),
                     then_branch,
@@ -1817,19 +1969,20 @@ pub mod parse {
 
         impl<'a> Parse for For<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, for0) = parser.parse::<primitive::For>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, binding) = parser.parse::<Var>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, in0) = parser.parse::<primitive::In>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, block) = parser.parse::<Block>()?;
                 Ok((parser, For {
+                    typ: expr.typ(),
                     for0,
                     binding,
                     in0,
@@ -1842,17 +1995,17 @@ pub mod parse {
         impl<'a, E> Parse for Group<'a, E> where
             E: Parse<
                 Error=Error,
-                Token=Result<lexer::Token<'a>, lexer::Error>
+                Token=Result<lex::Token<'a>, lex::Error>
             >
         {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::ParenLeft>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<E>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::ParenRight>()?;
                 Ok((parser, Group {
                     left,
@@ -1864,7 +2017,7 @@ pub mod parse {
 
         impl<'a> Parse for BinaryOp<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, mul) = parser.opt_parse::<primitive::Mul>();
@@ -1964,11 +2117,11 @@ pub mod parse {
 
         impl<'a> Parse for BinaryApRight<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, primitive_op) = parser.parse::<BinaryOp>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<Expr>()?;
 
                 Ok((parser, BinaryApRight {
@@ -1980,11 +2133,11 @@ pub mod parse {
 
         impl<'a> Parse for UnaryAp<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, op) = parser.parse::<UnaryOp>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 // Parse expressions that are directly next to the unary op to lift them up in the parse tree
                 let (parser, lit) = parser.opt_parse::<primitive::LitInt>();
                 let (parser, right) = match lit {
@@ -2019,6 +2172,7 @@ pub mod parse {
                     }
                 };
                 Ok((parser, UnaryAp {
+                    typ: right.typ(),
                     op,
                     right: Box::new(right)
                 }))
@@ -2027,7 +2181,7 @@ pub mod parse {
 
         impl<'a> Parse for UnaryOp<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, sub) = parser.opt_parse::<primitive::Sub>();
@@ -2043,7 +2197,7 @@ pub mod parse {
 
         impl<'a> Parse for SelectorApRight<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, selector_op) = parser.parse::<SelectorOp>()?;
@@ -2055,7 +2209,7 @@ pub mod parse {
 
         impl<'a> Parse for SelectorOp<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, named) = parser.opt_parse::<NamedSelector>();
@@ -2071,12 +2225,12 @@ pub mod parse {
 
         impl<'a> Parse for NamedSelector<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, dot) = parser.parse::<primitive::Dot>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
 
                 Ok((parser, NamedSelector {
@@ -2088,13 +2242,13 @@ pub mod parse {
 
         impl<'a> Parse for BracketSelector<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::BracketLeft>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::BracketRight>()?;
 
                 Ok((parser, BracketSelector {
@@ -2107,7 +2261,7 @@ pub mod parse {
 
         impl<'a> Parse for ApRight<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, group) = parser.parse::<Group<Punctuated<Expr, primitive::Comma>>>()?;
@@ -2118,14 +2272,14 @@ pub mod parse {
         }
 
         impl<'a, P, S> Parse for Punctuated<'a, P, S> where
-            P: Parse<Error=Error, Token=Result<lexer::Token<'a>, lexer::Error>>,
-            S: Parse<Error=Error, Token=Result<lexer::Token<'a>, lexer::Error>>,
+            P: Parse<Error=Error, Token=Result<lex::Token<'a>, lex::Error>>,
+            S: Parse<Error=Error, Token=Result<lex::Token<'a>, lex::Error>>,
         {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, _) = parser.opt_parse_token::<lexer::Whitespace>();
+                let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<P>()?;
                 let (parser, sep) = parser.opt_parse::<S>();
                 let (parser, other) = match sep {
@@ -2145,14 +2299,16 @@ pub mod parse {
 
         impl<'a> Parse for Var<'a> {
             type Error = Error;
-            type Token = Result<lexer::Token<'a>, lexer::Error>;
+            type Token = Result<lex::Token<'a>, lex::Error>;
 
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 Ok((parser, Var {
+                    typ: Type::Any,
                     name
                 }))
             }
         }
     }
 }
+
