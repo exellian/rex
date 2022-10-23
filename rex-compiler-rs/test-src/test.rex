@@ -1,5 +1,7 @@
-<test>
+<test name={ 5 + -3 }>
     {
-        name.name[49]
+        for product in products {
+            <div id={ product.id }>{ product.name }</div>
+        }
     }
 </test>

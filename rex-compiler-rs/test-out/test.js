@@ -1,0 +1,1 @@
+export default (props)=>{return createElement(`test`, {name:5 + -(3)}, [(props.products).map((product) => {return createElement(`div`, {id:(product).id}, [(product).name]);})]);}

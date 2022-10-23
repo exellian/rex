@@ -489,6 +489,7 @@ pub mod parse {
     use crate::rex::lex;
     use crate::rex::lex::Text;
     use crate::rex::parse::primitive::Empty;
+    use crate::rex::parse::scope::Scope;
     use crate::rex::parse::typ::Type;
     use crate::util::{Span, SpanOwned};
 
@@ -497,16 +498,17 @@ pub mod parse {
         Lexer(lex::Error),
         UnexpectedToken(SpanOwned),
         UnexpectedEof,
-        TypeError(Type, Type)
+        TypeError(Type, Type),
+        UnsupportedOperation
     }
 
-    mod primitive {
+    pub mod primitive {
         use std::marker::PhantomData;
         use crate::rex::lex::{FloatLiteral, IntLiteral, Punct, StrLiteral, Text};
 
         #[derive(Debug)]
         pub struct Ident<'a> {
-            text: Text<'a>
+            pub text: Text<'a>
         }
         #[derive(Debug)]
         pub struct BraceLeft<'a> {
@@ -643,22 +645,22 @@ pub mod parse {
         }
         #[derive(Debug)]
         pub struct LitStr<'a> {
-            lit: StrLiteral<'a>
+            pub lit: StrLiteral<'a>
         }
         #[derive(Debug)]
         pub struct LitInt<'a> {
-            lit: IntLiteral<'a>,
-            value: usize
+            pub lit: IntLiteral<'a>,
+            pub value: usize
         }
         #[derive(Debug)]
         pub struct LitFloat<'a> {
-            lit: FloatLiteral<'a>,
-            value: f64
+            pub lit: FloatLiteral<'a>,
+            pub value: f64
         }
         #[derive(Debug)]
         pub struct LitBool<'a> {
-            text: Text<'a>,
-            value: bool
+            pub text: Text<'a>,
+            pub value: bool
         }
 
         #[derive(Debug)]
@@ -674,6 +676,12 @@ pub mod parse {
             use crate::rex::lex::Lexer;
             use crate::rex::parse::Error;
             use crate::rex::parse::primitive::{Add, And, AndAnd, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma, Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Bang, Or, OrOr, ParenLeft, ParenRight, Sub, Xor};
+
+            impl<'a> PartialEq for Ident<'a> {
+                fn eq(&self, other: &Self) -> bool {
+                    self.text.span.value() == other.text.span.value()
+                }
+            }
 
             fn check_chars<P>(str: &str, predicate: P) -> bool where P: Fn(char) -> bool {
                 str.chars().all(predicate)
@@ -1308,7 +1316,7 @@ pub mod parse {
 
     #[derive(Debug)]
     pub struct View<'a> {
-        root: Option<NodeOrBlock<'a>>
+        pub root: Option<NodeOrBlock<'a>>
     }
     #[derive(Debug)]
     pub enum NodeOrBlock<'a> {
@@ -1322,30 +1330,30 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct TextNode<'a> {
-        text: Text<'a>
+        pub text: Text<'a>
     }
     #[derive(Debug)]
     pub struct TagNode<'a> {
-        lt: primitive::Lt<'a>,
-        name: primitive::Ident<'a>,
-        attributes: Vec<Attribute<'a>>,
-        div: Option<primitive::Div<'a>>,
-        gt: primitive::Gt<'a>,
-        block: Option<TagBlock<'a>>
+        pub lt: primitive::Lt<'a>,
+        pub name: primitive::Ident<'a>,
+        pub attributes: Vec<Attribute<'a>>,
+        pub div: Option<primitive::Div<'a>>,
+        pub gt: primitive::Gt<'a>,
+        pub block: Option<TagBlock<'a>>
     }
     #[derive(Debug)]
     pub struct TagBlock<'a> {
-        children: Vec<NodeOrBlock<'a>>,
-        lt: primitive::Lt<'a>,
-        div: primitive::Div<'a>,
-        name: primitive::Ident<'a>,
-        gt: primitive::Gt<'a>,
+        pub children: Vec<NodeOrBlock<'a>>,
+        pub lt: primitive::Lt<'a>,
+        pub div: primitive::Div<'a>,
+        pub name: primitive::Ident<'a>,
+        pub gt: primitive::Gt<'a>,
     }
     #[derive(Debug)]
     pub struct Attribute<'a> {
-        name: primitive::Ident<'a>,
-        eq: primitive::Eq<'a>,
-        value: AttributeValue<'a>
+        pub name: primitive::Ident<'a>,
+        pub eq: primitive::Eq<'a>,
+        pub value: AttributeValue<'a>
     }
     #[derive(Debug)]
     pub enum AttributeValue<'a> {
@@ -1354,9 +1362,9 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct Block<'a> {
-        left: primitive::BraceLeft<'a>,
-        expr: Box<Expr<'a>>,
-        right: primitive::BraceRight<'a>
+        pub left: primitive::BraceLeft<'a>,
+        pub expr: Box<Expr<'a>>,
+        pub right: primitive::BraceRight<'a>
     }
     // Order of expr members is important
     // it is also the order in which expr a tried to parsed
@@ -1377,20 +1385,20 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct Group<'a, E> {
-        left: primitive::ParenLeft<'a>,
-        expr: Box<E>,
-        right: primitive::ParenRight<'a>
+        pub left: primitive::ParenLeft<'a>,
+        pub expr: Box<E>,
+        pub right: primitive::ParenRight<'a>
     }
     #[derive(Debug)]
     pub struct BinaryAp<'a> {
-        typ: Type,
-        left: Box<Expr<'a>>,
-        right: BinaryApRight<'a>
+        pub typ: Type,
+        pub left: Box<Expr<'a>>,
+        pub right: BinaryApRight<'a>
     }
     #[derive(Debug)]
     pub struct BinaryApRight<'a> {
-        op: BinaryOp<'a>,
-        right: Box<Expr<'a>>
+        pub op: BinaryOp<'a>,
+        pub right: Box<Expr<'a>>
     }
     #[derive(Debug)]
     pub enum BinaryOp<'a> {
@@ -1413,9 +1421,9 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct UnaryAp<'a> {
-        typ: Type,
-        op: UnaryOp<'a>,
-        right: Box<Expr<'a>>
+        pub typ: Type,
+        pub op: UnaryOp<'a>,
+        pub right: Box<Expr<'a>>
     }
     #[derive(Debug)]
     pub enum UnaryOp<'a> {
@@ -1424,52 +1432,53 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct If<'a> {
-        typ: Type,
-        if0: primitive::If<'a>,
-        condition: Box<Expr<'a>>,
-        then_branch: Block<'a>,
-        elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
-        else_branch: (primitive::Else<'a>, Block<'a>)
+        pub typ: Type,
+        pub if0: primitive::If<'a>,
+        pub condition: Box<Expr<'a>>,
+        pub then_branch: Block<'a>,
+        pub elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
+        pub else_branch: (primitive::Else<'a>, Block<'a>)
     }
     #[derive(Debug)]
     pub struct For<'a> {
-        typ: Type,
-        for0: primitive::For<'a>,
-        binding: Var<'a>,
-        in0: primitive::In<'a>,
-        expr: Box<Expr<'a>>,
-        block: Block<'a>
+        pub typ: Type,
+        pub for0: primitive::For<'a>,
+        pub binding: Var<'a>,
+        pub in0: primitive::In<'a>,
+        pub expr: Box<Expr<'a>>,
+        pub block: Block<'a>
     }
     #[derive(Debug)]
     pub struct Var<'a> {
-        typ: Type,
-        name: primitive::Ident<'a>
+        pub typ: Type,
+        pub scope: Scope,
+        pub name: primitive::Ident<'a>
     }
     #[derive(Debug)]
     pub struct Ap<'a> {
-        typ: Type,
-        expr: Box<Expr<'a>>,
-        right: ApRight<'a>
+        pub typ: Type,
+        pub expr: Box<Expr<'a>>,
+        pub right: ApRight<'a>
     }
     #[derive(Debug)]
     pub struct ApRight<'a> {
-        group: Group<'a, Punctuated<'a, Expr<'a>, primitive::Comma<'a>>>
+        pub group: Group<'a, Punctuated<'a, Expr<'a>, primitive::Comma<'a>>>
     }
     #[derive(Debug)]
     pub struct Punctuated<'a, P, S> {
-        expr: Box<P>,
-        other: Option<(S, Box<Punctuated<'a, P, S>>)>,
+        pub expr: Box<P>,
+        pub other: Option<(S, Box<Punctuated<'a, P, S>>)>,
         _a: PhantomData<&'a ()>
     }
     #[derive(Debug)]
     pub struct SelectorAp<'a> {
-        typ: Type,
-        expr: Box<Expr<'a>>,
-        right: SelectorApRight<'a>
+        pub typ: Type,
+        pub expr: Box<Expr<'a>>,
+        pub right: SelectorApRight<'a>
     }
     #[derive(Debug)]
     pub struct SelectorApRight<'a> {
-        selector: SelectorOp<'a>
+        pub selector: SelectorOp<'a>
     }
     #[derive(Debug)]
     pub enum SelectorOp<'a> {
@@ -1478,23 +1487,42 @@ pub mod parse {
     }
     #[derive(Debug)]
     pub struct NamedSelector<'a> {
-        dot: primitive::Dot<'a>,
-        name: primitive::Ident<'a>
+        pub dot: primitive::Dot<'a>,
+        pub name: primitive::Ident<'a>
     }
     #[derive(Debug)]
     pub struct BracketSelector<'a> {
-        left: primitive::BracketLeft<'a>,
-        expr: Box<Expr<'a>>,
-        right: primitive::BracketRight<'a>
+        pub left: primitive::BracketLeft<'a>,
+        pub expr: Box<Expr<'a>>,
+        pub right: primitive::BracketRight<'a>
+    }
+
+    pub mod scope {
+        use crate::rex::parse::Var;
+        use crate::View;
+
+        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        pub enum Scope {
+            Global,
+            Local
+        }
+
+        impl<'a> View<'a> {
+            pub fn globals(&self) -> Vec<Var> {
+                todo!()
+            }
+        }
     }
 
     pub mod typ {
-        use crate::rex::parse::Expr;
+        use crate::rex::parse::{AttributeValue, BinaryOp, Expr, Node, NodeOrBlock, SelectorOp, TagBlock, Var};
         use crate::rex::parse::primitive::Lit;
+        use crate::rex::parse::scope::Scope;
 
         #[derive(Copy, Clone, Debug, PartialEq)]
         pub enum Type {
             Any,
+            Function,
             Unit,
             Array,
             Object,
@@ -1510,6 +1538,22 @@ pub mod parse {
             #[inline]
             pub fn eq_or_any(&self, other: &Self) -> bool {
                 *self == *other || *self == Type::Any || *other == Type::Any
+            }
+
+            #[inline]
+            pub(crate) fn is_primitive(&self) -> bool {
+                match self {
+                    Type::Any => false,
+                    Type::Function => false,
+                    Type::Unit => false,
+                    Type::Array => false,
+                    Type::Object => false,
+                    Type::String => true,
+                    Type::Int => true,
+                    Type::Float => true,
+                    Type::Bool => true,
+                    Type::HtmlElement => false
+                }
             }
         }
 
@@ -1578,6 +1622,145 @@ pub mod parse {
                     Expr::Ap(ap) => ap.typ = typ
                 }
             }
+
+            pub fn infer_scope_node(node: &mut Node, var: &Var, scope: Scope) {
+                match node {
+                    Node::Text(_) => {},
+                    Node::Tag(tag) => {
+                        for attr in &mut tag.attributes {
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => block.expr.infer_scope(var, scope)
+                            }
+                        }
+                        match &mut tag.block {
+                            None => {}
+                            Some(block) => {
+                                for child in &mut block.children {
+                                    match child {
+                                        NodeOrBlock::Node(node) => Self::infer_scope_node(node, var, scope),
+                                        NodeOrBlock::Block(block) => block.expr.infer_scope(var, scope)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            #[inline]
+            pub fn infer_scope(&mut self, var: &Var, scope: Scope) {
+                match self {
+                    Expr::If(if0) => {
+                        if0.condition.infer_scope(var, scope);
+                        if0.then_branch.expr.infer_scope(var, scope);
+                        if0.else_branch.1.expr.infer_scope(var, scope);
+                    },
+                    Expr::For(for0) => {
+                        for0.expr.infer_scope(var, scope);
+                        for0.block.expr.infer_scope(var, scope);
+                    }
+                    Expr::UnaryAp(un_ap) => {
+                        un_ap.right.infer_scope(var, scope);
+                    }
+                    Expr::Lit(_) => {},
+                    Expr::Var(this) => {
+                        if this.name == var.name {
+                            this.scope = scope;
+                        }
+                    },
+                    Expr::Node(node) => Self::infer_scope_node(node, var, scope),
+                    Expr::Empty(_) => {},
+                    Expr::Group(group) => {
+                        group.expr.infer_scope(var, scope)
+                    }
+                    Expr::BinaryAp(bin_ap) => {
+                        bin_ap.left.infer_scope(var, scope);
+                        bin_ap.right.right.infer_scope(var, scope);
+                    }
+                    Expr::SelectorAp(sel) => {
+                        sel.expr.infer_scope(var, scope);
+                        match &mut sel.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => b.expr.infer_scope(var, scope)
+                        }
+                    }
+                    Expr::Ap(ap) => {
+                        ap.expr.infer_scope(var, scope);
+                        let mut punct = &mut ap.right.group.expr;
+                        loop {
+                            punct.expr.infer_scope(var, scope);
+                            if let Some((_, other)) = &mut punct.other {
+                                punct = other
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        impl<'a> BinaryOp<'a> {
+            #[inline]
+            pub fn typ(&self, typ: Type) -> Option<Type> {
+                if !typ.is_primitive() {
+                    return None;
+                }
+                match self {
+                    BinaryOp::Multiplied(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::Divided(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::Plus(_) => Some(typ),
+                    BinaryOp::Minus(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::Modulo(_) => {
+                        if typ != Type::Bool && typ != Type::Int {
+                            return None;
+                        }
+                        Some(Type::Int)
+                    },
+                    BinaryOp::And(_) => Some(Type::Bool),
+                    BinaryOp::Or(_) => Some(Type::Bool),
+                    BinaryOp::BitAnd(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::BitOr(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::BitXor(_) => {
+                        if typ == Type::String {
+                            return None;
+                        }
+                        Some(typ)
+                    },
+                    BinaryOp::Eq(_) => Some(Type::Bool),
+                    BinaryOp::Ne(_) => Some(Type::Bool),
+                    BinaryOp::Le(_) => Some(Type::Bool),
+                    BinaryOp::Ge(_) => Some(Type::Bool),
+                    BinaryOp::Lt(_) => Some(Type::Bool),
+                    BinaryOp::Gt(_) => Some(Type::Bool)
+                }
+            }
         }
     }
 
@@ -1586,6 +1769,7 @@ pub mod parse {
         use crate::parser::{Parse, Parser};
         use crate::rex::lex;
         use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
+        use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::Type;
 
         impl From<lex::Error> for Error {
@@ -1781,11 +1965,11 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (mut parser, left) = {
                     let (parser, if0) = parser.opt_parse::<If>();
                     match if0 {
-                        Some(if0) => (parser, Some(Expr::If(if0))),
+                        Some(if0) => (parser,  Some(Expr::If(if0))),
                         None => {
                             let (parser, for0) = parser.opt_parse::<For>();
                             match for0 {
@@ -1843,6 +2027,11 @@ pub mod parse {
                             let (parser1, right) = parser1.opt_parse::<ApRight>();
                             match right {
                                 Some(right) => {
+                                    let left_typ = left.typ();
+                                    if !left_typ.eq_or_any(&Type::Function) {
+                                        return Err(Error::TypeError(left_typ, Type::Function))
+                                    }
+                                    left.infer(Type::Function);
                                     parser = parser1;
                                     left = Expr::Ap(Ap {
                                         typ: Type::Any,
@@ -1854,6 +2043,22 @@ pub mod parse {
                                     let (parser1, right) = parser1.opt_parse::<SelectorApRight>();
                                     match right {
                                         Some(right) => {
+                                            let left_typ = left.typ();
+                                            match right.selector {
+                                                SelectorOp::Named(_) => {
+                                                    if !left_typ.eq_or_any(&Type::Object) {
+                                                        return Err(Error::TypeError(left_typ, Type::Object))
+                                                    }
+                                                    left.infer(Type::Object);
+                                                }
+                                                SelectorOp::Bracket(_) => {
+                                                    if !left_typ.eq_or_any(&Type::Array) {
+                                                        return Err(Error::TypeError(left_typ, Type::Array))
+                                                    }
+                                                    left.infer(Type::Array);
+                                                }
+                                            }
+
                                             parser = parser1;
                                             left = Expr::SelectorAp(SelectorAp {
                                                 typ: Type::Any,
@@ -1865,21 +2070,27 @@ pub mod parse {
                                             let (parser1, right) = parser1.opt_parse::<BinaryApRight>();
                                             match right {
                                                 Some(mut right) => {
-                                                    let left_typ = left.typ();
+                                                    let mut left_typ = left.typ();
                                                     let right_typ = right.right.typ();
+
                                                     if left_typ.eq_or_any(&right_typ) {
                                                         if left_typ == Type::Any {
                                                             left.infer(right_typ);
+                                                            left_typ = right_typ;
                                                         }
                                                         if right_typ == Type::Any {
                                                             right.right.infer(left_typ);
                                                         }
-                                                        parser = parser1;
-                                                        left = Expr::BinaryAp(BinaryAp {
-                                                            typ: left_typ,
-                                                            left: Box::new(left),
-                                                            right
-                                                        });
+                                                        if let Some(typ) = right.op.typ(left_typ) {
+                                                            parser = parser1;
+                                                            left = Expr::BinaryAp(BinaryAp {
+                                                                typ,
+                                                                left: Box::new(left),
+                                                                right
+                                                            });
+                                                        } else {
+                                                            return Err(Error::UnsupportedOperation);
+                                                        }
                                                     } else {
                                                         return Err(Error::TypeError(left_typ, right_typ));
                                                     }
@@ -1974,13 +2185,15 @@ pub mod parse {
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, for0) = parser.parse::<primitive::For>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
-                let (parser, binding) = parser.parse::<Var>()?;
+                let (parser, mut binding) = parser.parse::<Var>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, in0) = parser.parse::<primitive::In>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
-                let (parser, block) = parser.parse::<Block>()?;
+                let (parser, mut block) = parser.parse::<Block>()?;
+                binding.scope = Scope::Local;
+                block.expr.infer_scope(&binding, binding.scope);
                 Ok((parser, For {
                     typ: expr.typ(),
                     for0,
@@ -2305,6 +2518,7 @@ pub mod parse {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 Ok((parser, Var {
                     typ: Type::Any,
+                    scope: Scope::Global,
                     name
                 }))
             }

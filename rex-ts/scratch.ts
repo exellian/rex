@@ -1,5 +1,6 @@
 import { hydrate, Component } from './src'
 
+/*
 class ButtonView {
     
 }
@@ -12,4 +13,8 @@ class Button {
     }
 }
 
-hydrate(null, Button)
+hydrate(null, Button)*/
+
+export default (props: any) => {
+
+}
