@@ -1,0 +1,18 @@
+{
+  "name": "rex-loader",
+  "version": "1.0.0",
+  "description": "",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^18.11.4",
+    "typescript": "^4.8.4"
+  },
+  "dependencies": {
+    "rex-compiler-ts": "file:../rex-compiler-ts"
+  }
+}

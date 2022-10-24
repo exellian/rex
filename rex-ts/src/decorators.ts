@@ -1,11 +1,23 @@
 import { IComponent } from "."
-import { View } from "./view"
+import {Options} from "./options";
+import {createElement, createTextNode} from "./browser";
 
-export function Component<V extends { new(): View } >(viewConstructor: V) {
+export function Component(options: Options) {
     return <T extends { new(...args: any[]): {} }>(constructor: T) => {
-        return class extends constructor implements IComponent {
+        return class Component extends constructor implements IComponent {
+            props: any;
             constructor(...args: any[]) {
                 super(...args)
+                if (args.length < 1)
+                    throw new Error("props parameter not supplied!")
+                this.props = args[0]
+            }
+
+            render(): Node {
+                return options.view(this.props, {
+                    createElement: createElement,
+                    createTextNode: createTextNode
+                })
             }
 
             onClick(): void {

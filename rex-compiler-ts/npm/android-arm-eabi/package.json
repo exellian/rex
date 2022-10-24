@@ -1,0 +1,18 @@
+{
+  "name": "rex-compiler-ts-android-arm-eabi",
+  "version": "0.0.0",
+  "os": [
+    "android"
+  ],
+  "cpu": [
+    "arm"
+  ],
+  "main": "rex-compiler-ts.android-arm-eabi.node",
+  "files": [
+    "rex-compiler-ts.android-arm-eabi.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

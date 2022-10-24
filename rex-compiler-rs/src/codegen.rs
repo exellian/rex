@@ -1,22 +1,22 @@
-pub mod ts {
+pub mod js {
 
-    pub struct TsCodegen {
+    pub struct JsCodegen {
 
     }
 
     mod implementation {
         use std::collections::HashSet;
-        use crate::codegen::ts::TsCodegen;
+        use crate::codegen::js::JsCodegen;
         use crate::rex::parse::{Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, UnaryAp, UnaryOp, Var};
         use crate::rex::parse::primitive::{Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::Type;
         use crate::View;
 
-        impl TsCodegen {
+        impl JsCodegen {
 
             pub fn new() -> Self {
-                TsCodegen {}
+                JsCodegen {}
             }
 
             pub fn escape(str: &str) -> String  {
@@ -258,8 +258,8 @@ pub mod ts {
             pub fn generate(&self, view: &View) -> String {
                 let mut str = String::new();
                 let globals = view.globals();
-                let globals_type = Self::generate_globals_type(&globals);
-                str.push_str(&format!("export default (props: {}, config)=>{{return ", globals_type));
+                //let globals_type = Self::generate_globals_type(&globals);
+                str.push_str(&format!("module.exports = function(props, config) {{return "));
                 match &view.root {
                     None => {},
                     Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob))

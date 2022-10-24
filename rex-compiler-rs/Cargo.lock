@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "rex-rs"
+name = "rex-compiler-rs"
 version = "0.1.0"

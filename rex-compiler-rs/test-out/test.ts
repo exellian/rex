@@ -1,1 +1,1 @@
-export default (props: {products: any[]}, config)=>{return config.createElement(`test`, {name:5 + -(3)}, [(props.products).map((product) => {return config.createElement(`div`, {id:(product).id}, [(product).name]);})]);}
+export default (props: {products: any[]}, config: {})=>{return config.createElement(`test`, {name:5 + -(3)}, [(props.products).map((product) => {return config.createElement(`div`, {id:(product).id}, [(product).name]);})]);}

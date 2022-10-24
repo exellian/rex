@@ -1,14 +1,16 @@
 use std::fs::File;
 use std::io::Write;
-use crate::codegen::ts::TsCodegen;
-use crate::cursor::Cursor;
+use crate::codegen::js::JsCodegen;
 use crate::rex::parse::View;
 
 mod util;
 mod cursor;
-mod parser;
-mod rex;
-mod codegen;
+pub mod parser;
+pub mod rex;
+pub mod codegen;
+
+pub use rex::lex;
+
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
@@ -30,9 +32,9 @@ fn main() {
     let (_, view) = parser.parse::<View>().unwrap();
     println!("{:#?}", view);
 
-    let ts = TsCodegen::new();
-    let res = ts.generate(&view);
+    let js = JsCodegen::new();
+    let res = js.generate(&view);
     std::fs::create_dir_all("test-out/").unwrap();
-    let mut out = File::create("test-out/test.ts").unwrap();
+    let mut out = File::create("test-out/test.js").unwrap();
     out.write_all(res.as_bytes()).unwrap();
 }

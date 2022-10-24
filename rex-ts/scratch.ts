@@ -1,11 +1,8 @@
 import { hydrate, Component } from './src'
 
-
-class ButtonView {
-    
-}
-
-@Component(ButtonView)
+@Component({
+    view: "../button.rex"
+})
 class Button {
 
     constructor() {

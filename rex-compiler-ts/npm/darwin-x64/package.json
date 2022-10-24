@@ -1,0 +1,18 @@
+{
+  "name": "rex-compiler-ts-darwin-x64",
+  "version": "0.0.0",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "rex-compiler-ts.darwin-x64.node",
+  "files": [
+    "rex-compiler-ts.darwin-x64.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}
