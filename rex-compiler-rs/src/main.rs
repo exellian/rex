@@ -33,6 +33,6 @@ fn main() {
     let ts = TsCodegen::new();
     let res = ts.generate(&view);
     std::fs::create_dir_all("test-out/").unwrap();
-    let mut out = File::create("test-out/test.js").unwrap();
+    let mut out = File::create("test-out/test.ts").unwrap();
     out.write_all(res.as_bytes()).unwrap();
 }

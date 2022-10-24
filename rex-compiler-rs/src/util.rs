@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, Hash)]
 pub struct Span<'a> {
     code: &'a str,
     range: Range<usize>
@@ -35,6 +35,12 @@ mod implementation {
                 value: self.value().to_string(),
                 range: self.range.clone()
             }
+        }
+    }
+
+    impl<'a> PartialEq for Span<'a> {
+        fn eq(&self, other: &Self) -> bool {
+            self.value() == other.value()
         }
     }
 

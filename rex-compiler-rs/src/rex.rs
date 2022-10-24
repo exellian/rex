@@ -14,7 +14,7 @@ pub mod lex {
         pub ch: char
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct Text<'a> {
         pub span: Span<'a>
     }
@@ -491,7 +491,7 @@ pub mod parse {
     use crate::rex::parse::primitive::Empty;
     use crate::rex::parse::scope::Scope;
     use crate::rex::parse::typ::Type;
-    use crate::util::{Span, SpanOwned};
+    use crate::util::SpanOwned;
 
     #[derive(Debug)]
     pub enum Error {
@@ -506,7 +506,7 @@ pub mod parse {
         use std::marker::PhantomData;
         use crate::rex::lex::{FloatLiteral, IntLiteral, Punct, StrLiteral, Text};
 
-        #[derive(Debug)]
+        #[derive(Debug, Eq, Clone, Hash)]
         pub struct Ident<'a> {
             pub text: Text<'a>
         }
@@ -1448,7 +1448,7 @@ pub mod parse {
         pub expr: Box<Expr<'a>>,
         pub block: Block<'a>
     }
-    #[derive(Debug)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct Var<'a> {
         pub typ: Type,
         pub scope: Scope,
@@ -1468,7 +1468,7 @@ pub mod parse {
     pub struct Punctuated<'a, P, S> {
         pub expr: Box<P>,
         pub other: Option<(S, Box<Punctuated<'a, P, S>>)>,
-        _a: PhantomData<&'a ()>
+        pub _a: PhantomData<&'a ()>
     }
     #[derive(Debug)]
     pub struct SelectorAp<'a> {
@@ -1498,18 +1498,123 @@ pub mod parse {
     }
 
     pub mod scope {
-        use crate::rex::parse::Var;
+        use std::collections::HashSet;
+        use crate::rex::parse::{AttributeValue, Expr, Node, NodeOrBlock, SelectorOp, Var};
         use crate::View;
 
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
         pub enum Scope {
             Global,
             Local
         }
 
+        impl<'a> Node<'a> {
+            #[inline]
+            pub fn globals(&self) -> HashSet<Var> {
+                match self {
+                    Node::Text(_) => HashSet::new(),
+                    Node::Tag(tag) => {
+                        let mut vars = HashSet::new();
+                        for attr in &tag.attributes {
+                            match &attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => {
+                                    vars.extend(block.expr.globals());
+                                }
+                            }
+                        }
+                        if let Some(block) = &tag.block {
+                            for nob in &block.children {
+                                match nob {
+                                    NodeOrBlock::Node(node) => {
+                                        vars.extend(node.globals());
+                                    }
+                                    NodeOrBlock::Block(block) => {
+                                        vars.extend(block.expr.globals());
+                                    }
+                                }
+                            }
+                        }
+                        vars
+                    }
+                }
+            }
+        }
+
+        impl<'a> Expr<'a> {
+            #[inline]
+            pub fn globals(&self) -> HashSet<Var> {
+                match self {
+                    Expr::If(if0) => {
+                        let mut vars = if0.condition.globals();
+                        vars.extend(if0.then_branch.expr.globals());
+                        for (_, _, _, block) in &if0.elseif_branches {
+                            vars.extend(block.expr.globals());
+                        }
+                        vars.extend(if0.else_branch.1.expr.globals());
+                        vars
+                    },
+                    Expr::For(for0) => {
+                        let mut vars = for0.expr.globals();
+                        vars.extend(for0.block.expr.globals());
+                        vars
+                    }
+                    Expr::UnaryAp(un_ap) => {
+                        un_ap.right.globals()
+                    }
+                    Expr::Lit(_) => HashSet::new(),
+                    Expr::Var(this) => {
+                        if this.scope == Scope::Global {
+                            HashSet::from([this.clone()])
+                        } else {
+                            HashSet::new()
+                        }
+                    },
+                    Expr::Node(node) => node.globals(),
+                    Expr::Empty(_) => HashSet::new(),
+                    Expr::Group(group) => group.expr.globals(),
+                    Expr::BinaryAp(bin_ap) => {
+                        let mut vars = bin_ap.left.globals();
+                        vars.extend(bin_ap.right.right.globals());
+                        vars
+                    }
+                    Expr::SelectorAp(sel) => {
+                        let mut vars = sel.expr.globals();
+                        match &sel.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => {
+                                vars.extend(b.expr.globals());
+                            }
+                        }
+                        vars
+                    }
+                    Expr::Ap(ap) => {
+                        let mut vars = ap.expr.globals();
+                        let mut punct = &ap.right.group.expr;
+                        loop {
+                            vars.extend(punct.expr.globals());
+                            if let Some((_, other)) = &punct.other {
+                                punct = other
+                            } else {
+                                break;
+                            }
+                        }
+                        vars
+                    }
+                }
+            }
+        }
+
         impl<'a> View<'a> {
-            pub fn globals(&self) -> Vec<Var> {
-                todo!()
+            #[inline]
+            pub fn globals(&self) -> HashSet<Var> {
+                match &self.root {
+                    None => HashSet::new(),
+                    Some(nob) => match nob {
+                        NodeOrBlock::Node(node) => node.globals(),
+                        NodeOrBlock::Block(block) => block.expr.globals()
+                    }
+                }
             }
         }
     }
@@ -1519,7 +1624,7 @@ pub mod parse {
         use crate::rex::parse::primitive::Lit;
         use crate::rex::parse::scope::Scope;
 
-        #[derive(Copy, Clone, Debug, PartialEq)]
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
         pub enum Type {
             Any,
             Function,
@@ -1654,6 +1759,9 @@ pub mod parse {
                     Expr::If(if0) => {
                         if0.condition.infer_scope(var, scope);
                         if0.then_branch.expr.infer_scope(var, scope);
+                        for (_, _, _, block) in &mut if0.elseif_branches {
+                            block.expr.infer_scope(var, scope);
+                        }
                         if0.else_branch.1.expr.infer_scope(var, scope);
                     },
                     Expr::For(for0) => {
@@ -2189,13 +2297,23 @@ pub mod parse {
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, in0) = parser.parse::<primitive::In>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
-                let (parser, expr) = parser.parse::<Expr>()?;
+                let (parser, mut expr) = parser.parse::<Expr>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, mut block) = parser.parse::<Block>()?;
                 binding.scope = Scope::Local;
                 block.expr.infer_scope(&binding, binding.scope);
+
+                let mut expr_typ = expr.typ();
+                if expr_typ == Type::Any {
+                    expr.infer(Type::Array);
+                    expr_typ = Type::Array;
+                }
+                if expr_typ != Type::Array {
+                    return Err(Error::TypeError(expr_typ, Type::Array));
+                }
+
                 Ok((parser, For {
-                    typ: expr.typ(),
+                    typ: block.expr.typ(),
                     for0,
                     binding,
                     in0,

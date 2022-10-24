@@ -5,10 +5,12 @@ pub mod ts {
     }
 
     mod implementation {
+        use std::collections::HashSet;
         use crate::codegen::ts::TsCodegen;
         use crate::rex::parse::{Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, UnaryAp, UnaryOp, Var};
         use crate::rex::parse::primitive::{Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
+        use crate::rex::parse::typ::Type;
         use crate::View;
 
         impl TsCodegen {
@@ -196,10 +198,10 @@ pub mod ts {
                             children.push_str(&e);
                             i += 1;
                         }
-                        format!("createElement(`{}`, {}, [{}])", tag_name, attrs, children)
+                        format!("config.createElement(`{}`, {}, [{}])", tag_name, attrs, children)
                     },
                     None => {
-                        format!("createElement(`{}`, {})", tag_name, attrs)
+                        format!("config.createElement(`{}`, {})", tag_name, attrs)
                     }
                 }
             }
@@ -209,7 +211,7 @@ pub mod ts {
                 match nob {
                     Node::Text(text) => {
                         let mut str = String::new();
-                        str.push_str(&format!("createTextNode(`{}`)", Self::escape(text.text.span.value())));
+                        str.push_str(&format!("config.createTextNode(`{}`)", Self::escape(text.text.span.value())));
                         str
                     },
                     Node::Tag(tag) => Self::generate_tag(tag)
@@ -228,9 +230,36 @@ pub mod ts {
                 }
             }
 
+            fn generate_type(typ: Type) -> String {
+                match typ {
+                    Type::Any => "any",
+                    Type::Function => "(..._:any[]) => any",
+                    Type::Unit => "void",
+                    Type::Array => "any[]",
+                    Type::Object => "{}",
+                    Type::String => "string",
+                    Type::Int => "number",
+                    Type::Float => "number",
+                    Type::Bool => "boolean",
+                    Type::HtmlElement => "HTMLElement"
+                }.to_string()
+            }
+
+            fn generate_globals_type(globals: &HashSet<Var>) -> String {
+                let mut str = String::new();
+                str.push_str("{");
+                for var in globals {
+                    str.push_str(&format!("{}: {}", var.name.text.span.value(), Self::generate_type(var.typ)));
+                }
+                str.push_str("}");
+                str
+            }
+
             pub fn generate(&self, view: &View) -> String {
                 let mut str = String::new();
-                str.push_str("export default (props)=>{return ");
+                let globals = view.globals();
+                let globals_type = Self::generate_globals_type(&globals);
+                str.push_str(&format!("export default (props: {}, config)=>{{return ", globals_type));
                 match &view.root {
                     None => {},
                     Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob))

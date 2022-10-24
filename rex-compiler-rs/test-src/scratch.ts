@@ -1,3 +1,5 @@
 import View from "../test-out/test"
 
-let comp = View({})
+function test(test: boolean, test1: HTMLElement) {
+
+}
