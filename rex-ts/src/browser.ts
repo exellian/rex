@@ -1,22 +1,18 @@
-export function createElement(name: string, attributes: { [key: string]: any }, children: any[]): Node {
+export function el(name: string, attributes: { [key: string]: any }, children: any[]): Node {
     let element = document.createElement(name)
     for (const key in attributes) {
-        element.setAttribute(key, attributes[key].toString())
+        element.setAttribute(key, attributes[key]().toString())
     }
-    console.log(children)
-    children.flatMap(value => {
-
-    })
-    for (const child of children.flat(Infinity)) {
-        console.log(child)
+    for (const f_child of children.flat(Infinity)) {
+        let child = f_child()
         if (child instanceof Node) {
             element.appendChild(child)
         } else {
-            element.appendChild(createTextNode(child.toString()))
+            element.appendChild(text(child.toString()))
         }
     }
     return element
 }
-export function createTextNode(value: string): Node {
+export function text(value: string): Node {
     return document.createTextNode(value)
 }

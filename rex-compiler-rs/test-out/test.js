@@ -1,1 +1,1 @@
-export default (props: {})=>{return createElement(`test`, {name:5 + -(3)}, [(props.products).map((product) => {return createElement(`div`, {id:(product).id}, [(product).name]);})]);}
+module.exports = {render: function(props, config) {return config.domEl(`test`, {name: () => config.el(`div`, {}, [])}, [() => (props.products).map((product) => {return (props.products).map((product1) => {return (product1).name;});})]);}}

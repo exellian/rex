@@ -1,11 +1,9 @@
 <test name={ <div></div> }>
     {
-        if  {
-
-        }
-
         for product in products {
-            <div id={ product.id }>{ product.name }</div>
+            for product1 in products {
+                product1.name
+            }
         }
     }
 </test>

@@ -1,3 +1,5 @@
+import {Config} from "./index";
+
 export interface Options {
-    view: (props: string, config: any) => any
+    view: <T>(props: string, config: Config<T, Node>) => T
 }

@@ -2,8 +2,8 @@ use std::ops::Range;
 
 #[derive(Clone, Eq, Hash)]
 pub struct Span<'a> {
-    code: &'a str,
-    range: Range<usize>
+    pub code: &'a str,
+    pub range: Range<usize>
 }
 
 #[derive(Clone, Debug)]

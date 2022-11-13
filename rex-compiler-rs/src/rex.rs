@@ -36,7 +36,7 @@ pub mod lex {
         pub delimiter: StringDelimiter
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct IntLiteral<'a> {
         pub span: Span<'a>
     }
@@ -245,7 +245,6 @@ pub mod lex {
 
             #[inline]
             fn is_text(ch: char) -> bool {
-                !Self::is_decimal(ch) &&
                     !Self::is_whitespace(ch) &&
                     !Self::is_punct(ch) &&
                     !Self::is_quote(ch)
@@ -499,7 +498,8 @@ pub mod parse {
         UnexpectedToken(SpanOwned),
         UnexpectedEof,
         TypeError(Type, Type),
-        UnsupportedOperation
+        UnsupportedOperation,
+        DuplicateVar(String)
     }
 
     pub mod primitive {
@@ -1448,7 +1448,7 @@ pub mod parse {
         pub expr: Box<Expr<'a>>,
         pub block: Block<'a>
     }
-    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Debug, Hash)]
     pub struct Var<'a> {
         pub typ: Type,
         pub scope: Scope,
@@ -1469,6 +1469,14 @@ pub mod parse {
         pub expr: Box<P>,
         pub other: Option<(S, Box<Punctuated<'a, P, S>>)>,
         pub _a: PhantomData<&'a ()>
+    }
+    #[derive(Debug)]
+    pub struct PunctuatedIter<'b, 'a, P, S> {
+        inner: Option<&'b Punctuated<'a, P, S>>
+    }
+    #[derive(Debug)]
+    pub struct PunctuatedIterMut<'b, 'a, P, S> {
+        inner: Option<&'b mut Punctuated<'a, P, S>>
     }
     #[derive(Debug)]
     pub struct SelectorAp<'a> {
@@ -1507,224 +1515,1020 @@ pub mod parse {
             Global,
             Local
         }
+    }
 
-        impl<'a> Node<'a> {
+    pub mod typ {
+        use std::cmp::Ordering;
+        use std::collections::{BTreeMap, HashSet};
+        use std::ops::Add;
+        use crate::rex::parse::{Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block, Error, Expr, For, If, Node, NodeOrBlock, primitive, SelectorAp, SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var};
+        use crate::rex::parse::primitive::Lit;
+        use crate::rex::parse::scope::Scope;
+        use crate::rex::View;
+
+        #[derive(Clone, Debug, Hash)]
+        pub enum AbstractType {
+            Any,
+            // IntLike, Int, Bool, Float
+            Number,
+            // Int, Bool
+            IntLike,
+            // String, Number, IntLike, Float, Int, Bool
+            AddAndEq
+        }
+        #[derive(Clone, Debug, PartialEq, Hash)]
+        pub enum PrimitiveType {
+            Function(Vec<Type>),
+            Unit,
+            Array(Box<Type>),
+            Object(BTreeMap<String, Type>),
+            String,
+            Int,
+            Float,
+            Bool,
+            Node
+        }
+
+        #[derive(Clone, Debug, Hash)]
+        pub enum Type {
+            Abstract(AbstractType),
+            Primitive(PrimitiveType)
+        }
+
+        pub struct Typed;
+
+        impl Typed {
+
+            pub fn un_ap<'a>(op: UnaryOp<'a>, mut right: Expr<'a>) -> Result<UnaryAp<'a>, Error> {
+                let mut right_typ = right.typ();
+                let typ = match op {
+                    UnaryOp::Neg(_) => {
+                        if right_typ > &Type::INT_LIKE {
+                            right.infer(&Type::INT_LIKE);
+                            Type::INT_LIKE
+                        } else if right_typ <= &Type::INT_LIKE {
+                            right_typ.clone()
+                        } else {
+                            return Err(Error::TypeError(right_typ.clone(), Type::INT_LIKE))
+                        }
+                    }
+                    UnaryOp::Not(_) => {
+                        if right_typ != &Type::BOOL {
+                            return Err(Error::TypeError(right_typ.clone(), Type::BOOL))
+                        }
+                        Type::BOOL
+                    }
+                };
+                Ok(UnaryAp {
+                    typ,
+                    op,
+                    right: Box::new(right)
+                })
+            }
+
+            pub fn sel_ap<'a>(mut left: Expr<'a>, right: SelectorApRight<'a>) -> Result<SelectorAp<'a>, Error> {
+                /*
+                 * Type inference of left type
+                */
+                let left_typ = left.typ();
+                let typ = match &right.selector {
+                    SelectorOp::Named(named) => {
+                        let sel_name = named.name.text.span.value();
+                        let typ = Type::object([(sel_name.to_string(), Type::ANY)]);
+                        if left_typ == &Type::ANY {
+                            left.infer(&typ);
+                            Type::ANY
+                        } else if left_typ.is_object() {
+                            left.infer(&(left_typ + &typ)?);
+                            left.typ().object_inner(sel_name).unwrap().clone()
+                        }
+                        else {
+                            return Err(Error::TypeError(left_typ.clone(), typ))
+                        }
+                    }
+                    SelectorOp::Bracket(_) => {
+                        let typ = Type::array(Type::ANY);
+                        if left_typ == &Type::ANY {
+                            left.infer(&typ);
+                            Type::ANY
+                        } else if left_typ.is_array() {
+                            left_typ.array_inner().clone()
+                        } else {
+                            return Err(Error::TypeError(left_typ.clone(), typ))
+                        }
+                    }
+                };
+                Ok(SelectorAp {
+                    typ,
+                    expr: Box::new(left),
+                    right
+                })
+            }
+
+            pub fn bin_ap<'a>(mut left: Expr<'a>, mut right: BinaryApRight<'a>) -> Result<BinaryAp<'a>, Error> {
+                let mut left_typ = &left.typ().clone();
+                let mut right_typ = &right.right.typ().clone();
+
+                /*
+                 * The following part is the most complex part: Type inference for a binary-ap
+                 * This includes a lot of different cases for different ops and different present types.
+                 */
+
+                // First of all a binary op can only be made on the following types
+                fn binop_type(typ: &Type) -> bool {
+                    typ <= &Type::ADD_AND_EQ || typ == &Type::ANY
+                }
+
+                if !binop_type(left_typ) || !binop_type(right_typ) {
+                    return Err(Error::UnsupportedOperation);
+                }
+
+                if left_typ < right_typ {
+                    right.right.infer(left_typ);
+                    right_typ = left_typ;
+                }
+                if right_typ < left_typ {
+                    left.infer(right_typ);
+                    left_typ = right_typ;
+                }
+
+                // MANUAL:
+                //      ls & rs         :means both have the same value
+                //      |               :means or
+                //      &               :means and
+                //      ==, !=          :means equal, not equal
+                //      =>, <=>, !=>    :mean typical implications
+                //      ls == {...}     :means ls must be one of the values in the set
+                // Assert ls and rs are <=number | string | any
+                // but:
+                // 1.   ls == any <=> rs == any
+                // 2.   ls == number => rs == number | rs == string
+                // 3.   ls == int_like => rs == int_like | rs == string
+                // 4.   ls == {float, int, bool} => !rs.is_abstract()
+                //      ls == string => rs != any      :because string < any
+                //
+                // Lemma:
+                //      ls & rs != string & ls != any
+                //  =>
+                //      ls & rs == {number, int_like} | (ls == {float, int, bool} & rs == {float, int, bool})
+                // Proof:
+                //      ls & rs != string & ls != any
+                //  with all left cases for ls and rs and 1. =>
+                //      ls == {number, int_like, float, int, bool} & rs == {number, int_like, float, int, bool}
+                //  with 2. and 3. and because rs != string =>
+                //      (ls == number & rs == number) | (ls == int_like & rs == int_like) | (ls == {float, int, bool} & rs == {float, int, bool})
+                //  <=>
+                //      ls & rs == {number, int_like} | (ls == {float, int, bool} & rs == {float, int, bool}) qed.
+
+                // Calculate the result type of the binary op
+                // And if the binary op can be calculated
+                let res_typ = match &right.op {
+                    BinaryOp::Multiplied(_) | BinaryOp::Divided(_) | BinaryOp::Minus(_) => {
+                        if left_typ == &Type::STRING || right_typ == &Type::STRING {
+                            None
+                        } else if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                            // Both operands are any
+                            left.infer(&Type::NUMBER);
+                            right.right.infer(&Type::NUMBER);
+                            Some(Type::NUMBER)
+                        } else { // ls & rs <= number
+                            // calculate the winning number type float < int < bool < int_like < number
+                            Some(Type::number_min(left_typ, right_typ).clone())
+                        }
+                    },
+                    BinaryOp::Plus(_) => {
+                        if left_typ == &Type::STRING || right_typ == &Type::STRING {
+                            Some(Type::STRING)
+                        } else if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                            left.infer(&Type::ADD_AND_EQ);
+                            right.right.infer(&Type::ADD_AND_EQ);
+                            Some(Type::ADD_AND_EQ)
+                        } else {
+                            // calculate the winning number type float < int < bool < int_like < number
+                            Some(Type::number_min(left_typ, right_typ).clone())
+                        }
+                    },
+                    BinaryOp::Modulo(_) => {
+                        if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                            left.infer(&Type::INT_LIKE);
+                            right.right.infer(&Type::INT_LIKE);
+                            Some(Type::INT_LIKE)
+                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE) {
+                            None
+                        } else {
+                            Some(Type::INT)
+                        }
+                    },
+                    BinaryOp::And(_) | BinaryOp::Or(_) => {
+                        if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                            left.infer(& Type::BOOL);
+                            right.right.infer(&Type::BOOL);
+                            Some(Type::BOOL)
+                        } else if left_typ != &Type::BOOL || right_typ != &Type::BOOL {
+                            //Both sides must be bool or any
+                            None
+                        } else {
+                            Some(Type::BOOL)
+                        }
+                    },
+                    BinaryOp::BitAnd(_) | BinaryOp::BitOr(_) | BinaryOp::BitXor(_) => {
+                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */  {
+                            left.infer(&Type::INT_LIKE);
+                            right.right.infer(&Type::INT_LIKE);
+                            Some(Type::INT_LIKE)
+                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE)  {
+                            None
+                        } else {
+                            Some(Type::number_min(left_typ, right_typ).clone())
+                        }
+                    },
+                    // Current restriction can only compare primitives (strings, numbers, int_likes, floats, ints, bools)
+                    BinaryOp::Eq(_) |
+                    BinaryOp::Ne(_) => {
+                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */  {
+                            left.infer(&Type::ADD_AND_EQ);
+                            right.right.infer(&Type::ADD_AND_EQ);
+                            Some(Type::ADD_AND_EQ)
+                        } else if !(left_typ <= &Type::ADD_AND_EQ) || !(right_typ <= &Type::ADD_AND_EQ) {
+                            None
+                        } else {
+                            Some(Type::BOOL)
+                        }
+                    },
+                    BinaryOp::Le(_) |
+                    BinaryOp::Ge(_) |
+                    BinaryOp::Lt(_) |
+                    BinaryOp::Gt(_) => {
+                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */ {
+                            left.infer(&Type::NUMBER);
+                            right.right.infer(&Type::NUMBER);
+                            Some(Type::NUMBER)
+                        } else if !(left_typ <= &Type::NUMBER) || !(right_typ <= &Type::NUMBER) {
+                            None
+                        } else {
+                            Some(Type::BOOL)
+                        }
+                    },
+                };
+                let typ = match res_typ {
+                    Some(t) => t,
+                    None => return Err(Error::UnsupportedOperation)
+                };
+                Ok(BinaryAp {
+                    typ,
+                    left: Box::new(left),
+                    right
+                })
+            }
+
             #[inline]
-            pub fn globals(&self) -> HashSet<Var> {
+            pub fn ap<'a>(mut left: Expr<'a>, right: ApRight<'a>) -> Result<Ap<'a>, Error> {
+                let left_typ = left.typ();
+                let mut arg_types: Vec<Type> = right.group.expr.args().map(|e| e.typ().clone()).collect();
+                // push return type
+                arg_types.push(Type::ANY);
+                let f_typ = Type::function(arg_types);
+                let typ = {
+                    if left_typ == &Type::ANY {
+                        left.infer(&f_typ);
+                        Type::ANY
+                    } else if left_typ.is_function() {
+                        left.infer(&(left_typ + &f_typ)?);
+                        left.typ().target_typ().clone()
+                    } else {
+                        return Err(Error::TypeError(left_typ.clone(), f_typ.clone()))
+                    }
+                };
+                left.infer(&f_typ);
+                Ok(Ap {
+                    typ,
+                    expr: Box::new(left),
+                    right
+                })
+            }
+
+            pub fn r#if<'a>(
+                if0: primitive::If<'a>,
+                condition: Expr<'a>,
+                mut then_branch: Block<'a>,
+                mut elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
+                mut else_branch: (primitive::Else<'a>, Block<'a>)
+            ) -> Result<If<'a>, Error> {
+                // Type check and type inference
+                let mut any_expr_mut = Vec::with_capacity(2 + elseif_branches.len());
+                any_expr_mut.push(&mut then_branch.expr);
+                any_expr_mut.push(&mut else_branch.1.expr);
+                for (_, _, _, block) in &mut elseif_branches { any_expr_mut.push(&mut block.expr); }
+                let mut typ = Type::ANY;
+                for expr in &any_expr_mut {
+                    let expr_typ = expr.typ();
+                    if !(expr_typ <= &typ) && !(expr_typ > &typ) {
+                        return Err(Error::TypeError(expr_typ.clone(), typ));
+                    }
+                    if expr_typ < &typ {
+                        typ = expr_typ.clone()
+                    }
+
+                }
+                for expr in any_expr_mut {
+                    if expr.typ() > &typ {
+                        expr.infer(&typ);
+                    }
+                }
+                Ok(If {
+                    typ: Type::ANY,
+                    if0,
+                    condition: Box::new(condition),
+                    then_branch,
+                    elseif_branches,
+                    else_branch
+                })
+            }
+
+            pub fn r#for<'a>(for0: primitive::For<'a>, mut binding: Var<'a>, in0: primitive::In<'a>, mut expr: Expr<'a>, mut block: Block<'a>) -> Result<For<'a>, Error> {
+                // Finds all occurrences of this binding in the block expression and find its type
+                let binding_name = binding.name.text.span.value();
+                block.expr.check_var_duplicated(binding_name)?;
+                if let Some(binding_typ) = block.expr.find_var_typ_and_infer(binding_name)? {
+                    binding.typ = binding_typ.clone();
+                }
+                let required_expr_typ = Type::array(binding.typ.clone());
+                let mut expr_typ = expr.typ();
+                if !(expr_typ <= &required_expr_typ) && !(expr_typ > &required_expr_typ) {
+                    return Err(Error::TypeError(expr_typ.clone(), required_expr_typ));
+                }
+                if expr_typ < &required_expr_typ {
+                    let inner = expr_typ.array_inner();
+                    binding.typ = inner.clone();
+                    block.expr.infer_var(binding_name, inner);
+                } else if expr_typ > &required_expr_typ {
+                    expr.infer(&required_expr_typ);
+                }
+                let typ = Type::array(block.expr.typ().clone());
+                Ok(For {
+                    typ,
+                    for0,
+                    binding,
+                    in0,
+                    expr: Box::new(expr),
+                    block
+                })
+            }
+        }
+
+        impl Type {
+            pub const ANY: Type = Type::Abstract(AbstractType::Any);
+            pub const NUMBER: Type = Type::Abstract(AbstractType::Number);
+            pub const INT_LIKE: Type = Type::Abstract(AbstractType::IntLike);
+            pub const ADD_AND_EQ: Type = Type::Abstract(AbstractType::AddAndEq);
+
+            pub const FLOAT: Type = Type::Primitive(PrimitiveType::Float);
+            pub const INT: Type = Type::Primitive(PrimitiveType::Int);
+            pub const BOOL: Type = Type::Primitive(PrimitiveType::Bool);
+            pub const STRING: Type = Type::Primitive(PrimitiveType::String);
+
+            pub const NODE: Type = Type::Primitive(PrimitiveType::Node);
+            pub const UNIT: Type = Type::Primitive(PrimitiveType::Unit);
+
+            #[inline]
+            pub fn array(typ: Type) -> Type {
+                Type::Primitive(PrimitiveType::Array(Box::new(typ)))
+            }
+
+            #[inline]
+            pub fn object<const N: usize>(attributes: [(String, Type);N]) -> Type {
+                Type::Primitive(PrimitiveType::Object(BTreeMap::from(attributes)))
+            }
+
+            #[inline]
+            pub fn function(arg_types: Vec<Type>) -> Type {
+                debug_assert!(arg_types.len() > 0);
+                Type::Primitive(PrimitiveType::Function(arg_types))
+            }
+
+            #[inline]
+            pub fn is_abstract(&self) -> bool {
                 match self {
-                    Node::Text(_) => HashSet::new(),
-                    Node::Tag(tag) => {
-                        let mut vars = HashSet::new();
-                        for attr in &tag.attributes {
-                            match &attr.value {
-                                AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(block) => {
-                                    vars.extend(block.expr.globals());
+                    Type::Abstract(_) => true,
+                    _ => false
+                }
+            }
+
+            #[inline]
+            pub fn is_array(&self) -> bool {
+                match self {
+                    Type::Primitive(PrimitiveType::Array(_)) => true,
+                    _ => false
+                }
+            }
+
+            #[inline]
+            pub fn is_object(&self) -> bool {
+                match self {
+                    Type::Primitive(PrimitiveType::Object(_)) => true,
+                    _ => false
+                }
+            }
+
+            #[inline]
+            pub fn is_function(&self) -> bool {
+                match self {
+                    Type::Primitive(PrimitiveType::Function(_)) => true,
+                    _ => false
+                }
+            }
+
+            #[inline]
+            pub fn object_inner(&self, sel_name: &str) -> Option<&Type> {
+                let Type::Primitive(PrimitiveType::Object(attributes)) = self else {
+                    panic!("Can't access selector on non object type!");
+                };
+                attributes.get(sel_name)
+            }
+
+            #[inline]
+            pub fn infer_object_inner(&mut self, sel_name: &str, typ: &Type) {
+                if let Some(t) = self.object_inner(sel_name) {
+                    debug_assert!(typ <= t);
+                }
+                let Type::Primitive(PrimitiveType::Object(attributes)) = self else {
+                    panic!("Can't access selector on non object type!");
+                };
+                attributes.insert(sel_name.into(), typ.clone());
+            }
+
+            #[inline]
+            pub fn array_inner(&self) -> &Type {
+                let Type::Primitive(PrimitiveType::Array(inner)) = self else {
+                    panic!("Can't access inner type on non array type!");
+                };
+                &inner
+            }
+
+            #[inline]
+            pub fn infer_array_inner(&mut self, typ: &Type) {
+                let Type::Primitive(PrimitiveType::Array(inner)) = self else {
+                    panic!("Can't access inner type on non array type!");
+                };
+                debug_assert!(typ <= inner);
+                *inner = Box::new(typ.clone());
+            }
+
+            #[inline]
+            pub fn target_typ(&self) -> &Type {
+                let Type::Primitive(PrimitiveType::Function(arg_types)) = self else {
+                    panic!("Can't access inner type on non array type!");
+                };
+                arg_types.last().unwrap()
+            }
+
+            #[inline]
+            pub fn infer_target_typ(&mut self, target_typ: &Type) {
+                let Type::Primitive(PrimitiveType::Function(arg_types)) = self else {
+                    panic!("Can't access inner type on non array type!");
+                };
+                let last_mut = arg_types.last_mut().unwrap();
+                debug_assert!(target_typ <= last_mut);
+                *last_mut = target_typ.clone();
+            }
+
+            #[inline]
+            pub fn number_min<'a>(lhs: &'a Self, rhs: &'a Self) -> &'a Self {
+                match lhs {
+                    Type::Abstract(AbstractType::Number) | Type::Abstract(AbstractType::IntLike) => match rhs {
+                        Type::Abstract(AbstractType::Number) => lhs,
+                        Type::Abstract(AbstractType::IntLike) | Type::Primitive(_) => rhs,
+                        _ => panic!("rhs must be number!")
+                    },
+                    Type::Primitive(PrimitiveType::Float) => lhs,
+                    Type::Primitive(PrimitiveType::Int) | Type::Primitive(PrimitiveType::Bool) => {
+                        match rhs {
+                            Type::Abstract(_) => lhs,
+                            Type::Primitive(PrimitiveType::Float) | Type::Primitive(PrimitiveType::Int) => rhs,
+                            Type::Primitive(PrimitiveType::Bool) => lhs,
+                            _ => panic!("rhs must be number!")
+                        }
+                    }
+                    _ => panic!("lhs must be a number!")
+                }
+            }
+
+            pub fn infer(&mut self, typ: &Type) {
+                debug_assert!(typ <= self);
+                if typ < self {
+                    *self = typ.clone();
+                }
+            }
+
+            #[inline]
+            fn partial_cmp_attributes_helper(more: &BTreeMap<String, Type>, less: &BTreeMap<String, Type>) -> Option<Ordering> {
+                debug_assert!(more.len() >= less.len());
+                let mut covered = 0;
+                let mut one_less = false;
+                for (self_key, self_value) in more {
+                    match less.get(self_key) {
+                        Some(value) => {
+                            if self_value > value || !(self_value <= value) {
+                                return None;
+                            }
+                            covered += 1;
+                            if self_value < value {
+                                one_less = true;
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                // more doesn't cover all keys of other map
+                if covered != less.len() {
+                    return None;
+                }
+                if more.len() == less.len() && !one_less {
+                    Some(Ordering::Equal)
+                } else {
+                    Some(Ordering::Less)
+                }
+            }
+
+            #[inline]
+            fn partial_cmp_attributes(lhs: &BTreeMap<String, Type>, rhs: &BTreeMap<String, Type>) -> Option<Ordering> {
+                if lhs.len() >= rhs.len() {
+                    Self::partial_cmp_attributes_helper(lhs, rhs)
+                } else {
+                    Self::partial_cmp_attributes_helper(rhs, lhs).map(|ord| ord.reverse())
+                }
+            }
+
+            #[inline]
+            fn partial_cmp_arg_types(lhs: &Vec<Type>, rhs: &Vec<Type>) -> Option<Ordering> {
+                if lhs.len() != rhs.len() {
+                    return None;
+                }
+                let mut assumed_ordering = None;
+                let mut i = 0;
+                for typ in lhs {
+                    match assumed_ordering {
+                        None => {
+                            let Some(new_ord) = typ.partial_cmp(&rhs[i]) else {
+                                return None;
+                            };
+                            assumed_ordering = Some(new_ord);
+                        }
+                        Some(ass_ord) => {
+                            let Some(new_ord) = typ.partial_cmp(&rhs[i]) else {
+                                return None;
+                            };
+                            if new_ord != ass_ord {
+                                if ass_ord == Ordering::Equal {
+                                    assumed_ordering = Some(new_ord);
+                                } else {
+                                    return None;
                                 }
                             }
                         }
-                        if let Some(block) = &tag.block {
-                            for nob in &block.children {
-                                match nob {
-                                    NodeOrBlock::Node(node) => {
-                                        vars.extend(node.globals());
-                                    }
-                                    NodeOrBlock::Block(block) => {
-                                        vars.extend(block.expr.globals());
-                                    }
-                                }
-                            }
-                        }
-                        vars
+                    }
+                    i += 1;
+                }
+                assumed_ordering
+            }
+        }
+
+        impl Add for &Type {
+            type Output = Result<Type, Error>;
+
+            fn add(self, rhs: Self) -> Self::Output {
+                //Self::check(types.as_ref())?;
+                todo!()
+            }
+        }
+
+        impl PartialEq for Type {
+            fn eq(&self, other: &Self) -> bool {
+                match self {
+                    Type::Abstract(self_typ) => match other {
+                        Type::Abstract(other_typ) => self_typ == other_typ,
+                        Type::Primitive(_) => false
+                    }
+                    Type::Primitive(self_typ) => match other {
+                        Type::Abstract(_) => false,
+                        Type::Primitive(other_typ) => self_typ == other_typ
                     }
                 }
             }
         }
 
-        impl<'a> Expr<'a> {
-            #[inline]
-            pub fn globals(&self) -> HashSet<Var> {
+        impl PartialOrd for Type {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                 match self {
-                    Expr::If(if0) => {
-                        let mut vars = if0.condition.globals();
-                        vars.extend(if0.then_branch.expr.globals());
-                        for (_, _, _, block) in &if0.elseif_branches {
-                            vars.extend(block.expr.globals());
+                    Type::Abstract(abs) => abs.partial_cmp(other),
+                    Type::Primitive(prim) => match other {
+                        Type::Abstract(abs) => abs.partial_cmp(self).map(|ord| ord.reverse()),
+                        Type::Primitive(other_prim) => match other_prim {
+                            PrimitiveType::Object(attributes) => {
+                                if let PrimitiveType::Object(self_attributes) = prim {
+                                    Self::partial_cmp_attributes(self_attributes, attributes)
+                                } else {
+                                    None
+                                }
+                            },
+                            PrimitiveType::Array(inner) => {
+                                if let PrimitiveType::Array(self_inner) = prim {
+                                    self_inner.partial_cmp(inner)
+                                } else {
+                                    None
+                                }
+                            },
+                            PrimitiveType::Function(arg_types) => {
+                                if let PrimitiveType::Function(self_arg_types) = prim {
+                                    Self::partial_cmp_arg_types(self_arg_types, arg_types)
+                                } else {
+                                    None
+                                }
+                            },
+                            _ => if prim == other_prim { Some(Ordering::Equal) } else { None }
                         }
-                        vars.extend(if0.else_branch.1.expr.globals());
-                        vars
+                    }
+                }
+            }
+        }
+
+        impl PartialEq for AbstractType {
+            fn eq(&self, other: &Self) -> bool {
+                match self {
+                    AbstractType::Any => if let AbstractType::Any = other { true } else { false }
+                    AbstractType::Number => if let AbstractType::Number = other { true } else { false }
+                    AbstractType::IntLike => if let AbstractType::IntLike = other { true } else { false }
+                    AbstractType::AddAndEq => if let AbstractType::AddAndEq = other { true } else { false }
+                }
+            }
+        }
+
+        impl PartialEq<Type> for AbstractType {
+            fn eq(&self, other: &Type) -> bool {
+                todo!()
+            }
+        }
+
+        impl PartialOrd<Type> for AbstractType {
+            fn partial_cmp(&self, other: &Type) -> Option<Ordering> {
+                match self {
+                    AbstractType::Any => match other {
+                        Type::Abstract(AbstractType::Any) => Some(Ordering::Equal),
+                        _ => Some(Ordering::Greater)
                     },
-                    Expr::For(for0) => {
-                        let mut vars = for0.expr.globals();
-                        vars.extend(for0.block.expr.globals());
-                        vars
-                    }
-                    Expr::UnaryAp(un_ap) => {
-                        un_ap.right.globals()
-                    }
-                    Expr::Lit(_) => HashSet::new(),
-                    Expr::Var(this) => {
-                        if this.scope == Scope::Global {
-                            HashSet::from([this.clone()])
-                        } else {
-                            HashSet::new()
+                    AbstractType::AddAndEq => match other {
+                        Type::Abstract(a) => match a {
+                            AbstractType::Any => Some(Ordering::Less),
+                            AbstractType::AddAndEq => Some(Ordering::Equal),
+                            AbstractType::Number => Some(Ordering::Greater),
+                            AbstractType::IntLike => Some(Ordering::Greater)
+                        },
+                        Type::Primitive(p) => match p {
+                            PrimitiveType::String | PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => Some(Ordering::Greater),
+                            _ => None
                         }
                     },
-                    Expr::Node(node) => node.globals(),
-                    Expr::Empty(_) => HashSet::new(),
-                    Expr::Group(group) => group.expr.globals(),
-                    Expr::BinaryAp(bin_ap) => {
-                        let mut vars = bin_ap.left.globals();
-                        vars.extend(bin_ap.right.right.globals());
-                        vars
-                    }
-                    Expr::SelectorAp(sel) => {
-                        let mut vars = sel.expr.globals();
-                        match &sel.right.selector {
-                            SelectorOp::Named(_) => {}
-                            SelectorOp::Bracket(b) => {
-                                vars.extend(b.expr.globals());
-                            }
+                    AbstractType::Number => match other {
+                        Type::Abstract(a) => match a {
+                            AbstractType::Any => Some(Ordering::Less),
+                            AbstractType::AddAndEq => Some(Ordering::Less),
+                            AbstractType::Number => Some(Ordering::Equal),
+                            AbstractType::IntLike => Some(Ordering::Greater)
+                        },
+                        Type::Primitive(p) => match p {
+                            PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => Some(Ordering::Greater),
+                            _ => None
                         }
-                        vars
                     }
-                    Expr::Ap(ap) => {
-                        let mut vars = ap.expr.globals();
-                        let mut punct = &ap.right.group.expr;
-                        loop {
-                            vars.extend(punct.expr.globals());
-                            if let Some((_, other)) = &punct.other {
-                                punct = other
-                            } else {
-                                break;
-                            }
+                    AbstractType::IntLike => match other {
+                        Type::Abstract(a) => match a {
+                            AbstractType::Any | AbstractType::AddAndEq | AbstractType::Number => Some(Ordering::Less),
+                            AbstractType::IntLike => Some(Ordering::Equal),
+                        },
+                        Type::Primitive(p) => match p {
+                            PrimitiveType::Int | PrimitiveType::Bool => Some(Ordering::Greater),
+                            _ => None
                         }
-                        vars
                     }
                 }
             }
         }
 
         impl<'a> View<'a> {
-            #[inline]
-            pub fn globals(&self) -> HashSet<Var> {
-                match &self.root {
-                    None => HashSet::new(),
-                    Some(nob) => match nob {
-                        NodeOrBlock::Node(node) => node.globals(),
-                        NodeOrBlock::Block(block) => block.expr.globals()
-                    }
-                }
-            }
-        }
-    }
 
-    pub mod typ {
-        use crate::rex::parse::{AttributeValue, BinaryOp, Expr, Node, NodeOrBlock, SelectorOp, TagBlock, Var};
-        use crate::rex::parse::primitive::Lit;
-        use crate::rex::parse::scope::Scope;
-
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-        pub enum Type {
-            Any,
-            Function,
-            Unit,
-            Array,
-            Object,
-            String,
-            Int,
-            Float,
-            Bool,
-            HtmlElement
-        }
-
-        impl Type {
-
-            #[inline]
-            pub fn eq_or_any(&self, other: &Self) -> bool {
-                *self == *other || *self == Type::Any || *other == Type::Any
-            }
-
-            #[inline]
-            pub(crate) fn is_primitive(&self) -> bool {
-                match self {
-                    Type::Any => false,
-                    Type::Function => false,
-                    Type::Unit => false,
-                    Type::Array => false,
-                    Type::Object => false,
-                    Type::String => true,
-                    Type::Int => true,
-                    Type::Float => true,
-                    Type::Bool => true,
-                    Type::HtmlElement => false
-                }
+            pub fn globals(&self) -> HashSet<Var<'a>> {
+                todo!()
             }
         }
 
         impl<'a> Expr<'a> {
 
             #[inline]
-            pub fn typ(&self) -> Type {
+            pub fn typ(&self) -> &Type {
                 match self {
-                    Expr::If(if0) => if0.typ,
-                    Expr::For(for0) => for0.typ,
-                    Expr::UnaryAp(un_ap) => un_ap.typ,
+                    Expr::If(if0) => &if0.typ,
+                    Expr::For(for0) => &for0.typ,
+                    Expr::UnaryAp(un_ap) => &un_ap.typ,
                     Expr::Lit(lit) => match lit {
-                        Lit::Str(_) => Type::String,
-                        Lit::Int(_) => Type::Int,
-                        Lit::Float(_) => Type::Float,
-                        Lit::Bool(_) => Type::Bool
+                        Lit::Str(_) => &Type::Primitive(PrimitiveType::String),
+                        Lit::Int(_) => &Type::Primitive(PrimitiveType::Int),
+                        Lit::Float(_) => &Type::Primitive(PrimitiveType::Float),
+                        Lit::Bool(_) => &Type::Primitive(PrimitiveType::Bool)
                     },
-                    Expr::Var(var) => var.typ,
-                    Expr::Node(_) => Type::HtmlElement,
-                    Expr::Empty(_) => Type::Unit,
+                    Expr::Var(var) => &var.typ,
+                    Expr::Node(_) => &Type::Primitive(PrimitiveType::Node),
+                    Expr::Empty(_) => &Type::Primitive(PrimitiveType::Unit),
                     Expr::Group(group) => group.expr.typ(),
-                    Expr::BinaryAp(bin_ap) => bin_ap.typ,
-                    Expr::SelectorAp(sel_ap) => sel_ap.typ,
-                    Expr::Ap(ap) => ap.typ
+                    Expr::BinaryAp(bin_ap) => &bin_ap.typ,
+                    Expr::SelectorAp(sel_ap) => &sel_ap.typ,
+                    Expr::Ap(ap) => &ap.typ
                 }
             }
 
-            #[inline]
-            pub fn infer(&mut self, typ: Type) {
-                if typ == Type::Any {
-                    return;
+            fn types_match_and_infer(types: Vec<Option<&mut Type>>) -> Result<Option<&mut Type>, Error> {
+                let mut min_typ = None;
+                let mut rest = vec![];
+                for typ_opt in types {
+                    match min_typ {
+                        None => min_typ = typ_opt,
+                        Some(min) => match typ_opt {
+                            None => min_typ = Some(min),
+                            Some(typ) => {
+                                if !(typ <= min) && !(typ > min) {
+                                    return Err(Error::TypeError(typ.clone(), (*min).clone()));
+                                }
+                                if typ < min {
+                                    rest.push(min);
+                                    min_typ = Some(typ);
+                                } else {
+                                    rest.push(typ);
+                                    min_typ = Some(min);
+                                }
+                            }
+                        }
+                    }
                 }
+                if let Some(min) = &min_typ {
+                    for typ in rest {
+                        if *min < typ {
+                            *typ = (*min).clone();
+                        }
+                    }
+                }
+                Ok(min_typ)
+            }
+
+            /**
+             * Finds the type of a given var name in an expression and adjusts all unequal types
+             * if possible otherwise returns a type error
+             */
+            pub fn find_var_typ_and_infer(&mut self, var_name: &str) -> Result<Option<&mut Type>, Error> {
                 match self {
                     Expr::If(if0) => {
-                        if0.typ = typ;
-                        if0.then_branch.expr.infer(typ);
-                        for (_, _, _, block) in &mut if0.elseif_branches {
-                            block.expr.infer(typ);
+                        let mut vars = vec![];
+                        vars.push(if0.condition.find_var_typ_and_infer(var_name)?);
+                        vars.push(if0.then_branch.expr.find_var_typ_and_infer(var_name)?);
+                        for (_, _, expr, block) in &mut if0.elseif_branches {
+                            vars.push(expr.find_var_typ_and_infer(var_name)?);
+                            vars.push(block.expr.find_var_typ_and_infer(var_name)?);
                         }
-                        if0.else_branch.1.expr.infer(typ);
+                        vars.push(if0.else_branch.1.expr.find_var_typ_and_infer(var_name)?);
+                        Self::types_match_and_infer(vars)
                     },
                     Expr::For(for0) => {
-                        for0.typ = typ;
-                        for0.block.expr.infer(typ);
+                        let mut vars = vec![];
+                        vars.push(for0.expr.find_var_typ_and_infer(var_name)?);
+                        vars.push(for0.block.expr.find_var_typ_and_infer(var_name)?);
+                        Self::types_match_and_infer(vars)
+                    },
+                    Expr::UnaryAp(un_ap) => un_ap.right.find_var_typ_and_infer(var_name),
+                    Expr::Lit(_) => Ok(None),
+                    Expr::Var(var) => {
+                        if var.name.text.span.value() == var_name {
+                            Ok(Some(&mut var.typ))
+                        } else {
+                            Ok(None)
+                        }
+                    },
+                    Expr::Node(_) => Ok(None),
+                    Expr::Empty(_) => Ok(None),
+                    Expr::Group(group) => group.expr.find_var_typ_and_infer(var_name),
+                    Expr::BinaryAp(bin_ap) => {
+                        let mut vars = vec![];
+                        vars.push(bin_ap.left.find_var_typ_and_infer(var_name)?);
+                        vars.push(bin_ap.right.right.find_var_typ_and_infer(var_name)?);
+                        Self::types_match_and_infer(vars)
+                    },
+                    Expr::SelectorAp(sel_ap) => {
+                        let mut vars = vec![];
+                        vars.push(sel_ap.expr.find_var_typ_and_infer(var_name)?);
+                        match &mut sel_ap.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => vars.push(b.expr.find_var_typ_and_infer(var_name)?)
+                        }
+                        Self::types_match_and_infer(vars)
+                    },
+                    Expr::Ap(ap) => {
+                        let mut vars = vec![];
+                        vars.push(ap.expr.find_var_typ_and_infer(var_name)?);
+                        for arg in ap.right.group.expr.args_mut() {
+                            vars.push(arg.find_var_typ_and_infer(var_name)?);
+                        }
+                        Self::types_match_and_infer(vars)
                     }
+                }
+            }
+
+            pub fn check_var_duplicated(&mut self, var_name: &str) -> Result<(), Error> {
+                match self {
+                    Expr::If(if0) => {
+                        if0.condition.check_var_duplicated(var_name)?;
+                        if0.then_branch.expr.check_var_duplicated(var_name)?;
+                        for (_, _, expr, block) in &mut if0.elseif_branches {
+                            expr.check_var_duplicated(var_name)?;
+                            block.expr.check_var_duplicated(var_name)?;
+                        }
+                        if0.else_branch.1.expr.check_var_duplicated(var_name)?;
+                        Ok(())
+                    },
+                    Expr::For(for0) => {
+                        if for0.binding.name.text.span.value() == var_name {
+                            return Err(Error::DuplicateVar(var_name.into()))
+                        }
+                        for0.expr.check_var_duplicated(var_name)?;
+                        for0.block.expr.check_var_duplicated(var_name)?;
+                        Ok(())
+                    },
                     Expr::UnaryAp(un_ap) => {
-                        un_ap.typ = typ;
-                        un_ap.right.infer(typ);
+                        un_ap.right.check_var_duplicated(var_name)?;
+                        Ok(())
+                    },
+                    Expr::Lit(_) | Expr::Var(_) | Expr::Node(_) | Expr::Empty(_) => Ok(()),
+                    Expr::Group(group) => {
+                        group.expr.check_var_duplicated(var_name)?;
+                        Ok(())
+                    },
+                    Expr::BinaryAp(bin_ap) => {
+                        bin_ap.left.check_var_duplicated(var_name)?;
+                        bin_ap.right.right.check_var_duplicated(var_name)?;
+                        Ok(())
+                    },
+                    Expr::SelectorAp(sel_ap) => {
+                        sel_ap.expr.check_var_duplicated(var_name)?;
+                        match &mut sel_ap.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => b.expr.check_var_duplicated(var_name)?
+                        }
+                        Ok(())
+                    },
+                    Expr::Ap(ap) => {
+                        ap.expr.check_var_duplicated(var_name)?;
+                        for arg in ap.right.group.expr.args_mut() {
+                            arg.check_var_duplicated(var_name)?;
+                        }
+                        Ok(())
                     }
-                    Expr::Lit(_) =>
-                        panic!("Can't infer type for literal!"),
-                    Expr::Var(var) => var.typ = typ,
-                    Expr::Node(_) => panic!("Can't infer type for node!"),
-                    Expr::Empty(_) => panic!("Can't infer type for empty expression!"),
+                }
+            }
+
+            /**
+             * Infers the type for a var by a given name and type
+             */
+            #[inline]
+            pub fn infer_var(&mut self, var_name: &str, typ: &Type) {
+                match self {
+                    Expr::If(if0) => {
+                        if0.condition.infer_var(var_name, typ);
+                        if0.then_branch.expr.infer_var(var_name, typ);
+                        for (_, _, condition, block) in &mut if0.elseif_branches {
+                            condition.infer_var(var_name, typ);
+                            block.expr.infer_var(var_name, typ);
+                        }
+                        if0.else_branch.1.expr.infer_var(var_name, typ);
+                    },
+                    Expr::For(for0) => {
+                        for0.expr.infer_var(var_name, typ);
+                        for0.block.expr.infer_var(var_name, typ);
+                    },
+                    Expr::UnaryAp(un_ap) => un_ap.right.infer_var(var_name, typ),
+                    Expr::Var(var) => {
+                        if var.name.text.span.value() == var_name {
+                            var.typ = typ.clone()
+                        }
+                    },
+                    Expr::Node(_) | Expr::Empty(_) | Expr::Lit(_) => {},
+                    Expr::Group(group) => group.expr.infer_var(var_name, typ),
+                    Expr::BinaryAp(bin_ap) => {
+                        bin_ap.left.infer_var(var_name, typ);
+                        bin_ap.right.right.infer_var(var_name, typ);
+                    },
+                    Expr::SelectorAp(sel_ap) => {
+                        sel_ap.expr.infer_var(var_name, typ);
+                        match &mut sel_ap.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => b.expr.infer_var(var_name, typ),
+                        }
+                    },
+                    Expr::Ap(ap) => {
+                        ap.expr.infer_var(var_name, typ);
+                        for arg in ap.right.group.expr.args_mut() {
+                            arg.infer_var(var_name, typ);
+                        }
+                    }
+                }
+            }
+
+            /**
+             * This sets the type for an expression.
+             * This can only be done with types that are smaller equals the existing type.
+             * NOTE: This function doesn't merge object types!
+             */
+            #[inline]
+            pub fn infer(&mut self, typ: &Type) {
+                match self {
+                    Expr::If(if0) => {
+                        debug_assert!(typ <= &if0.typ);
+                        if typ < &if0.typ {
+                            if0.typ = typ.clone();
+                            if0.then_branch.expr.infer(typ);
+                            for (_, _, _, block) in &mut if0.elseif_branches {
+                                block.expr.infer(typ);
+                            }
+                            if0.else_branch.1.expr.infer(typ);
+                        }
+                    },
+                    Expr::For(for0) => {
+                        debug_assert!(typ <= &for0.typ);
+                        if typ < &for0.typ {
+                            for0.typ = typ.clone();
+                            for0.block.expr.infer(typ);
+                        }
+                    },
+                    Expr::UnaryAp(un_ap) => {
+                        debug_assert!(typ <= &un_ap.typ);
+                        if typ < &un_ap.typ {
+                            un_ap.typ = typ.clone();
+                            un_ap.right.infer(typ);
+                        }
+                    },
+                    Expr::Lit(lit) => match lit {
+                        Lit::Str(_) => debug_assert!(typ == &Type::STRING),
+                        Lit::Int(_) => debug_assert!(typ == &Type::INT),
+                        Lit::Float(_) => debug_assert!(typ == &Type::FLOAT),
+                        Lit::Bool(_) => debug_assert!(typ == &Type::BOOL),
+                    },
+                    Expr::Var(var) => {
+                        debug_assert!(typ <= &var.typ);
+                        if typ < &var.typ {
+                            var.typ = typ.clone();
+                        }
+                    },
+                    Expr::Node(_) => debug_assert!(typ == &Type::NODE),
+                    Expr::Empty(_) => debug_assert!(typ == &Type::UNIT),
                     Expr::Group(group) => {
                         group.expr.infer(typ);
-                    }
+                    },
                     Expr::BinaryAp(bin_ap) => {
-                        bin_ap.typ = typ;
-                        bin_ap.left.infer(typ);
-                        bin_ap.right.right.infer(typ);
-                    }
+                        debug_assert!(typ <= &bin_ap.typ);
+                        if typ < &bin_ap.typ {
+                            bin_ap.typ = typ.clone();
+                            let left_typ = bin_ap.left.typ();
+                            let right_typ = bin_ap.right.right.typ();
+                            if typ < left_typ {
+                                bin_ap.left.infer(typ);
+                            }
+                            if typ < right_typ {
+                                bin_ap.right.right.infer(typ);
+                            }
+                        }
+                    },
                     Expr::SelectorAp(sel) => {
-                        sel.typ = typ;
+                        debug_assert!(typ <= &sel.typ);
+                        if typ < &sel.typ {
+                            sel.typ = typ.clone();
+                            match &sel.right.selector {
+                                SelectorOp::Named(named) => {
+                                    let sel_name = named.name.text.span.value();
+                                    let mut sel_typ = sel.expr.typ().clone();
+                                    sel_typ.infer_object_inner(sel_name, typ);
+                                    sel.expr.infer(&sel_typ);
+                                }
+                                SelectorOp::Bracket(_) => {
+                                    let mut sel_typ = sel.expr.typ().clone();
+                                    sel_typ.infer_array_inner(typ);
+                                    sel.expr.infer(&sel_typ);
+                                }
+                            }
+                        }
                     }
-                    Expr::Ap(ap) => ap.typ = typ
+                    Expr::Ap(ap) => {
+                        debug_assert!(typ <= &ap.typ);
+                        if typ < &ap.typ {
+                            let mut f_typ = ap.expr.typ().clone();
+                            f_typ.infer_target_typ(typ);
+                            ap.expr.infer(&f_typ);
+                        }
+                    }
                 }
             }
 
@@ -1808,81 +2612,62 @@ pub mod parse {
                 }
             }
         }
-
-        impl<'a> BinaryOp<'a> {
-            #[inline]
-            pub fn typ(&self, typ: Type) -> Option<Type> {
-                if !typ.is_primitive() {
-                    return None;
-                }
-                match self {
-                    BinaryOp::Multiplied(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::Divided(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::Plus(_) => Some(typ),
-                    BinaryOp::Minus(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::Modulo(_) => {
-                        if typ != Type::Bool && typ != Type::Int {
-                            return None;
-                        }
-                        Some(Type::Int)
-                    },
-                    BinaryOp::And(_) => Some(Type::Bool),
-                    BinaryOp::Or(_) => Some(Type::Bool),
-                    BinaryOp::BitAnd(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::BitOr(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::BitXor(_) => {
-                        if typ == Type::String {
-                            return None;
-                        }
-                        Some(typ)
-                    },
-                    BinaryOp::Eq(_) => Some(Type::Bool),
-                    BinaryOp::Ne(_) => Some(Type::Bool),
-                    BinaryOp::Le(_) => Some(Type::Bool),
-                    BinaryOp::Ge(_) => Some(Type::Bool),
-                    BinaryOp::Lt(_) => Some(Type::Bool),
-                    BinaryOp::Gt(_) => Some(Type::Bool)
-                }
-            }
-        }
     }
 
     mod implementation {
         use crate::cursor::Cursor;
         use crate::parser::{Parse, Parser};
         use crate::rex::lex;
-        use crate::rex::parse::{Ap, ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryAp, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp};
+        use crate::rex::parse::{ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp, PunctuatedIter, PunctuatedIterMut};
         use crate::rex::parse::scope::Scope;
-        use crate::rex::parse::typ::Type;
+        use crate::rex::parse::typ::{Type, Typed};
 
         impl From<lex::Error> for Error {
             fn from(err: lex::Error) -> Self {
                 Error::Lexer(err)
+            }
+        }
+
+        impl<'a, P, S> Punctuated<'a, P, S> {
+            pub(crate) fn args(&self) -> PunctuatedIter<'_, 'a, P, S> {
+                PunctuatedIter {
+                    inner: Some(self)
+                }
+            }
+            pub(crate) fn args_mut(&mut self) -> PunctuatedIterMut<'_, 'a, P, S> {
+                PunctuatedIterMut {
+                    inner: Some(self)
+                }
+            }
+        }
+
+        impl<'b, 'a, P, S> Iterator for PunctuatedIter<'b, 'a, P, S> {
+            type Item = &'b P;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.inner {
+                    None => None,
+                    Some(punct) => {
+                        let e = &*punct.expr;
+                        self.inner = punct.other.as_ref().map(|(_, other)| &**other);
+                        Some(e)
+                    }
+                }
+            }
+        }
+
+        impl<'b, 'a, P, S> Iterator for PunctuatedIterMut<'b, 'a, P, S> {
+            type Item = &'b mut P;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.inner.take() {
+                    None => None,
+                    Some(punct) => {
+                        let e = &mut *punct.expr;
+                        self.inner = punct.other.as_mut().map(|(_, other)| &mut **other);
+                        Some(e)
+                    }
+                }
             }
         }
 
@@ -2073,7 +2858,7 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error>  {
                 let (mut parser, left) = {
                     let (parser, if0) = parser.opt_parse::<If>();
                     match if0 {
@@ -2135,73 +2920,22 @@ pub mod parse {
                             let (parser1, right) = parser1.opt_parse::<ApRight>();
                             match right {
                                 Some(right) => {
-                                    let left_typ = left.typ();
-                                    if !left_typ.eq_or_any(&Type::Function) {
-                                        return Err(Error::TypeError(left_typ, Type::Function))
-                                    }
-                                    left.infer(Type::Function);
                                     parser = parser1;
-                                    left = Expr::Ap(Ap {
-                                        typ: Type::Any,
-                                        expr: Box::new(left),
-                                        right
-                                    });
+                                    left = Expr::Ap(Typed::ap(left, right)?);
                                 },
                                 None => {
                                     let (parser1, right) = parser1.opt_parse::<SelectorApRight>();
                                     match right {
                                         Some(right) => {
-                                            let left_typ = left.typ();
-                                            match right.selector {
-                                                SelectorOp::Named(_) => {
-                                                    if !left_typ.eq_or_any(&Type::Object) {
-                                                        return Err(Error::TypeError(left_typ, Type::Object))
-                                                    }
-                                                    left.infer(Type::Object);
-                                                }
-                                                SelectorOp::Bracket(_) => {
-                                                    if !left_typ.eq_or_any(&Type::Array) {
-                                                        return Err(Error::TypeError(left_typ, Type::Array))
-                                                    }
-                                                    left.infer(Type::Array);
-                                                }
-                                            }
-
                                             parser = parser1;
-                                            left = Expr::SelectorAp(SelectorAp {
-                                                typ: Type::Any,
-                                                expr: Box::new(left),
-                                                right
-                                            });
+                                            left = Expr::SelectorAp(Typed::sel_ap(left, right)?);
                                         },
                                         None => {
                                             let (parser1, right) = parser1.opt_parse::<BinaryApRight>();
                                             match right {
                                                 Some(mut right) => {
-                                                    let mut left_typ = left.typ();
-                                                    let right_typ = right.right.typ();
-
-                                                    if left_typ.eq_or_any(&right_typ) {
-                                                        if left_typ == Type::Any {
-                                                            left.infer(right_typ);
-                                                            left_typ = right_typ;
-                                                        }
-                                                        if right_typ == Type::Any {
-                                                            right.right.infer(left_typ);
-                                                        }
-                                                        if let Some(typ) = right.op.typ(left_typ) {
-                                                            parser = parser1;
-                                                            left = Expr::BinaryAp(BinaryAp {
-                                                                typ,
-                                                                left: Box::new(left),
-                                                                right
-                                                            });
-                                                        } else {
-                                                            return Err(Error::UnsupportedOperation);
-                                                        }
-                                                    } else {
-                                                        return Err(Error::TypeError(left_typ, right_typ));
-                                                    }
+                                                    parser = parser1;
+                                                    left = Expr::BinaryAp(Typed::bin_ap(left, right)?);
                                                 },
                                                 None => break (parser1, left)
                                             }
@@ -2253,36 +2987,7 @@ pub mod parse {
                         }
                     }
                 };
-
-                // Type check and inference
-                let mut any_expr_mut = Vec::with_capacity(2 + elseif_branches.len());
-                any_expr_mut.push(&mut then_branch.expr);
-                any_expr_mut.push(&mut else_branch.1.expr);
-                for (_, _, _, block) in &mut elseif_branches { any_expr_mut.push(&mut block.expr); }
-                let mut typ = Type::Any;
-                for expr in &any_expr_mut {
-                    let typ1 = expr.typ();
-                    if !typ.eq_or_any(&typ1) {
-                        return Err(Error::TypeError(typ, typ1));
-                    }
-                    if typ == Type::Any && typ1 != Type::Any {
-                        typ = typ1;
-                    }
-                }
-                for expr in any_expr_mut {
-                    if expr.typ() == Type::Any {
-                        expr.infer(typ);
-                    }
-                }
-
-                Ok((parser, If {
-                    typ,
-                    if0,
-                    condition: Box::new(condition),
-                    then_branch,
-                    elseif_branches,
-                    else_branch
-                }))
+                Ok((parser, Typed::r#if(if0, condition, then_branch, elseif_branches, else_branch)?))
             }
         }
 
@@ -2303,23 +3008,7 @@ pub mod parse {
                 binding.scope = Scope::Local;
                 block.expr.infer_scope(&binding, binding.scope);
 
-                let mut expr_typ = expr.typ();
-                if expr_typ == Type::Any {
-                    expr.infer(Type::Array);
-                    expr_typ = Type::Array;
-                }
-                if expr_typ != Type::Array {
-                    return Err(Error::TypeError(expr_typ, Type::Array));
-                }
-
-                Ok((parser, For {
-                    typ: block.expr.typ(),
-                    for0,
-                    binding,
-                    in0,
-                    expr: Box::new(expr),
-                    block
-                }))
+                Ok((parser, Typed::r#for(for0, binding, in0, expr, block)?))
             }
         }
 
@@ -2502,11 +3191,8 @@ pub mod parse {
                         }
                     }
                 };
-                Ok((parser, UnaryAp {
-                    typ: right.typ(),
-                    op,
-                    right: Box::new(right)
-                }))
+
+                Ok((parser, Typed::un_ap(op, right)?))
             }
         }
 
@@ -2635,7 +3321,7 @@ pub mod parse {
             fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 Ok((parser, Var {
-                    typ: Type::Any,
+                    typ: Type::ANY,
                     scope: Scope::Global,
                     name
                 }))
