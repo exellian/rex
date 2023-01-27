@@ -1,4 +1,9 @@
 target
+rex-compiler-ts/target
+rex-compiler-rs/target
+rex-loader/node_modules
+rex-test-ts/node_modules
+rex-ts/node_modules
 .idea
 node_modules
 dist
