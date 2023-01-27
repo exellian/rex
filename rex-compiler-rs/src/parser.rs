@@ -15,7 +15,7 @@ pub trait Token where Self: Sized {
 }
 
 pub struct Parser<C> where C: Cursor {
-    cursor: C,
+    cursor: C,  
 }
 mod implementation {
     use crate::cursor::Cursor;
