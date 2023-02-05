@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::Write;
 use rex_compiler_rs::{parser, rex};
-use rex_compiler_rs::codegen::js::JsCodegen;
+use rex_compiler_rs::codegen::rs::RsCodegen;
 use rex_compiler_rs::rex::View;
 
 fn main() {
@@ -24,9 +24,9 @@ fn main() {
     let (_, view) = parser.parse::<View>().unwrap();
     println!("{:#?}", view);
 
-    let js = JsCodegen::new();
-    let res = js.generate(&view);
+    let rs = RsCodegen::new();
+    let res = rs.generate(&view);
     std::fs::create_dir_all("test-out/").unwrap();
-    let mut out = File::create("test-out/test.js").unwrap();
+    let mut out = File::create("test-out/test.rs").unwrap();
     out.write_all(res.as_bytes()).unwrap();
 }

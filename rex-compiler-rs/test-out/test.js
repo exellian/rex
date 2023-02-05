@@ -1,1 +1,0 @@
-module.exports = {render: function(props, config) {return config.domEl(`test`, {name: () => config.el(`div`, {}, [])}, [() => (props.products).map((product) => {return (props.products).map((product1) => {return (product1).name;});})]);}}

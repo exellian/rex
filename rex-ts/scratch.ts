@@ -1,7 +1,7 @@
-import { hydrate, Component } from './src'
+import {Component, createRoot} from './src'
 
 @Component({
-    view: "../button.rex"
+    view: "views/button.rex"
 })
 class Button {
 
@@ -10,8 +10,5 @@ class Button {
     }
 }
 
-hydrate(null, Button)
-
-export default (props: any) => {
-
-}
+let root = createRoot(Button)
+root.hydrate(document.getElementById("root")!)

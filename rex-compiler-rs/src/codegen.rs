@@ -340,7 +340,7 @@ pub mod rs {
                 let binding = Self::generate_var(&expr.binding, in_attr);
                 let arr = Self::generate_expr(&expr.expr, in_attr);
                 let mut inner = Self::generate_expr(&expr.block.expr, in_attr);
-                str.push_str(&format!("({}).map(({}) => {{return {};}})", arr, binding, inner));
+                str.push_str(&format!("({}).map(|{}| {{{}}})", arr, binding, inner));
                 str
             }
             fn generate_un_ap(expr: &UnaryAp, in_attr: bool) -> String {
@@ -386,8 +386,8 @@ pub mod rs {
                 let args = Self::generate_punctuated_expr(&expr.right.group.expr, in_attr);
                 format!("({})({})", left, args)
             }
-            fn generate_empty(empty: &Empty) -> String  {
-                "undefined".to_string()
+            fn generate_empty(_: &Empty) -> String  {
+                "()".to_string()
             }
 
             fn generate_expr(expr: &Expr, in_attr: bool) -> String {
@@ -412,7 +412,7 @@ pub mod rs {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
                     AttributeValue::Block(block) => Self::generate_expr(&block.expr, true)
                 };
-                format!("{}: () => {}", attr.name.text.span.value(), value)
+                format!("({}, || {})", attr.name.text.span.value(), value)
             }
 
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
@@ -420,13 +420,13 @@ pub mod rs {
                     .map(|attr| Self::generate_attribute(attr))
                     .collect::<Vec<String>>()
                     .join(",");
-                format!("{{{}}}", inner)
+                format!("HashMap::from([{}])", inner)
             }
 
             fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
-                let el_name = if in_attr { "el" } else { "domEl" };
+                let el_name = if in_attr { "el" } else { "dom_el" };
                 match &tag.block {
                     Some(tag_block) => {
                         let mut children = String::new();
@@ -437,23 +437,23 @@ pub mod rs {
                                 children.push_str(",");
                             }
 
-                            children.push_str(&format!("() => {}", e));
+                            children.push_str(&format!("|| {}", e));
                             i += 1;
                         }
-                        format!("config.{}(`{}`, {}, [{}])", el_name, tag_name, attrs, children)
+                        format!("config.{}(\"{}\", {}, vec![{}])", el_name, tag_name, attrs, children)
                     },
                     None => {
-                        format!("config.{}(`{}`, {})", el_name, tag_name, attrs)
+                        format!("config.{}(\"{}\", {})", el_name, tag_name, attrs)
                     }
                 }
             }
 
             pub fn generate_node(nob: &Node, in_attr: bool) -> String {
-                let text_name = if in_attr { "text" } else { "domText" };
+                let text_name = if in_attr { "text" } else { "dom_text" };
                 match nob {
                     Node::Text(text) => {
                         let mut str = String::new();
-                        str.push_str(&format!("config.{}(`{}`)", text_name, Self::escape(text.text.span.value())));
+                        str.push_str(&format!("config.{}(\"{}\")", text_name, Self::escape(text.text.span.value())));
                         str
                     },
                     Node::Tag(tag) => Self::generate_tag(tag, in_attr)
@@ -485,7 +485,7 @@ pub mod rs {
                         PrimitiveType::Function(arg_types) => {
                             let args: Vec<String> = arg_types.iter().map(|typ| Self::generate_type(generics, typ)).collect();
                             let arg_list = args[0..args.len() - 1].join(",");
-                            generics.next(Some(&format!("Fn({}) -> {}", arg_list, args[args.len() - 1])))
+                            generics.next(Some(&format!("fn({}) -> {}", arg_list, args[args.len() - 1])))
                         }
                         PrimitiveType::Unit => "()".into(),
                         PrimitiveType::Array(inner) => {
@@ -516,13 +516,14 @@ pub mod rs {
             pub fn generate(&self, view: &View) -> String {
                 let mut str = String::new();
                 let globals = view.globals();
+                println!("{:?}", globals);
                 let props_struct = Self::generate_props_struct(&globals);
-                str.push_str(&format!("{} fn render(props: &Props, config) {{return ", props_struct));
+                str.push_str(&format!("{} fn render(props: &Props, config: &rex::Config) {{", props_struct));
                 match &view.root {
                     None => {},
                     Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob, false))
                 }
-                str.push_str(";}");
+                str.push_str("}");
                 str
             }
         }

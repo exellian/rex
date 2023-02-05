@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use crate::codegen::js::JsCodegen;
@@ -10,7 +11,6 @@ pub mod rex;
 pub mod codegen;
 
 pub use rex::lex;
-
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
@@ -35,6 +35,6 @@ fn main() {
     let js = JsCodegen::new();
     let res = js.generate(&view);
     std::fs::create_dir_all("test-out/").unwrap();
-    let mut out = File::create("test-out/test.js").unwrap();
+    let mut out = File::create("test-out/test.rs").unwrap();
     out.write_all(res.as_bytes()).unwrap();
 }

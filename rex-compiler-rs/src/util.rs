@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 #[derive(Clone, Eq, Hash)]
@@ -10,6 +11,16 @@ pub struct Span<'a> {
 pub struct SpanOwned {
     value: String,
     range: Range<usize>
+}
+
+pub struct Multimap<K, V> {
+    inner: HashMap<K, HashSet<V>>
+}
+impl<K, V> Multimap<K, V> where V: PartialEq {
+
+    pub fn insert(&mut self, val: V) {
+        self.inner.
+    }
 }
 
 mod implementation {

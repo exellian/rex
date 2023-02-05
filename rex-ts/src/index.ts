@@ -1,13 +1,12 @@
 import { el as browserEl, text as browserText } from './browser'
 
-export interface IComponent {
+import { Component } from "./decorators"
+export { Component }
+
+export interface INode {
     onInit(): void
     onMounted(): void
     onDrop(): void
-}
-
-export interface IComponentView {
-    render(): Node
 }
 
 export interface Config<R, T> {
@@ -17,12 +16,14 @@ export interface Config<R, T> {
     text: (text: string) => T
 }
 
-export type View = (props: { [key: string]: any }, config: Config<any, any>) => any
+export type View = <R, T>(props: { [key: string]: () => any }, config: Config<R, T>) => R
 
-export interface ComponentConstructor {
+interface IComponent extends Type<any> {
     _NAME: string
     _VIEW: View
-    new(props: any): IComponent | IComponentView
+}
+export declare interface Type<T> extends Function {
+    new (...args: any[]): T;
 }
 
 enum HydrateMessage {
@@ -34,33 +35,40 @@ enum HydrateMessage {
     TextNotEqual = "",
 }
 
+export function createRoot<T>(root: T, dependencies?: Array<Type<any>>): Root {
+    // TODO type check root and type check dependencies
+    let comps = new Map<string, IComponent>()
+    if (dependencies) {
+        for (let c of dependencies) {
+            if (comps.has(c.constructor.name)) {
+                throw new Error(Message.ComponentAlreadyExist)
+            }
+            comps.set(c.constructor.name, c as IComponent)
+        }
+    }
+    return new Root(root as INode, comps)
+}
+
 enum Message {
     RootNotFound = "",
     ComponentAlreadyExist = "",
 }
 
-export class Reactor {
+export class Root {
 
-    private readonly _root: ComponentConstructor
-    private readonly _components: Map<string, ComponentConstructor>
+    private readonly _root: INode
+    private readonly _components: Map<string, IComponent>
 
-    constructor(root: ComponentConstructor) {
+    constructor(root: INode, components: Map<string, IComponent>) {
         this._root = root
-        this._components = new Map<string, ComponentConstructor>()
-    }
-
-    public mount(cc: ComponentConstructor): void {
-        if (this._components.has(cc._NAME)) {
-            throw new Error(Message.ComponentAlreadyExist)
-        }
-        this._components.set(cc._NAME, cc)
+        this._components = components
     }
 
     private static isNonStd(name: string): boolean {
         return false
     }
 
-    private _hydrate(el: Node, cc: ComponentConstructor): void {
+    private _hydrate(el: Node, cc: IComponent): void {
         let self = this
         let component = el
         //
@@ -86,7 +94,7 @@ export class Reactor {
                         if (!el.hasAttribute(name)) {
                             throw new Error(HydrateMessage.AttributeMismatch)
                         }
-                        let value = attributes[name]()
+                        let value: any = attributes[name]()
                         if (el.getAttribute(name) !== value) {
                             throw new Error(HydrateMessage.AttributeValueMismatch)
                         }
@@ -96,7 +104,7 @@ export class Reactor {
                 if (self._components.has(name)) {
                     self._hydrate(el, self._components.get(name)!)
                 } else {
-                    if (Reactor.isNonStd(name)) {
+                    if (Root.isNonStd(name)) {
                         console.warn(`Non standard tag-name: ${name}! Did you forget to mount a component? Please don't use non std tags!`)
                     }
                     let node = el
@@ -129,7 +137,7 @@ export class Reactor {
             throw new Error(Message.RootNotFound)
         }
         let root = element.childNodes.item(0)
-        this._hydrate(root, this._root)
+        this._hydrate(root, this._root.constructor as IComponent)
     }
 
 }

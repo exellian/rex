@@ -1448,7 +1448,7 @@ pub mod parse {
         pub expr: Box<Expr<'a>>,
         pub block: Block<'a>
     }
-    #[derive(Clone, Debug, Hash)]
+    #[derive(Clone, Debug)]
     pub struct Var<'a> {
         pub typ: Type,
         pub scope: Scope,
@@ -1519,10 +1519,11 @@ pub mod parse {
 
     pub mod typ {
         use std::cmp::Ordering;
-        use std::collections::{BTreeMap, HashSet};
+        use std::collections::{BTreeMap, HashMap, HashSet};
+        use std::hash::{Hash, Hasher};
         use std::ops::Add;
-        use crate::rex::parse::{Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block, Error, Expr, For, If, Node, NodeOrBlock, primitive, SelectorAp, SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var};
-        use crate::rex::parse::primitive::Lit;
+        use crate::rex::parse::{Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block, Error, Expr, For, If, Node, NodeOrBlock, primitive, Punctuated, SelectorAp, SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var};
+        use crate::rex::parse::primitive::{Comma, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::View;
 
@@ -1781,7 +1782,6 @@ pub mod parse {
                 })
             }
 
-            #[inline]
             pub fn ap<'a>(mut left: Expr<'a>, right: ApRight<'a>) -> Result<Ap<'a>, Error> {
                 let left_typ = left.typ();
                 let mut arg_types: Vec<Type> = right.group.expr.args().map(|e| e.typ().clone()).collect();
@@ -1835,6 +1835,13 @@ pub mod parse {
                         expr.infer(&typ);
                     }
                 }
+
+                // We must determine the minimum type for each global var and set all global
+                let cond0_globals = condition.globals();
+                let expr0_globals = then_branch.expr.globals();
+
+                let expr0_globals = then_branch.expr.globals();
+
                 Ok(If {
                     typ: Type::ANY,
                     if0,
@@ -1853,7 +1860,7 @@ pub mod parse {
                     binding.typ = binding_typ.clone();
                 }
                 let required_expr_typ = Type::array(binding.typ.clone());
-                let mut expr_typ = expr.typ();
+                let expr_typ = expr.typ();
                 if !(expr_typ <= &required_expr_typ) && !(expr_typ > &required_expr_typ) {
                     return Err(Error::TypeError(expr_typ.clone(), required_expr_typ));
                 }
@@ -1865,6 +1872,25 @@ pub mod parse {
                     expr.infer(&required_expr_typ);
                 }
                 let typ = Type::array(block.expr.typ().clone());
+
+                // Infer minimum type for global vars
+                let expr_globals = expr.globals();
+                let block_globals = block.expr.globals();
+
+                for var in &expr_globals {
+                    match block_globals.get(var) {
+                        None => {}
+                        Some(other) => {
+                            if var.typ < other.typ {
+                                block.expr.infer_var(var.name.text.span.value(), &var.typ);
+                            }
+                            if other.typ < var.typ {
+                                expr.infer_var(var.name.text.span.value(), &other.typ);
+                            }
+                        }
+                    }
+                }
+
                 Ok(For {
                     typ,
                     for0,
@@ -2216,12 +2242,105 @@ pub mod parse {
 
         impl<'a> View<'a> {
 
-            pub fn globals(&self) -> HashSet<Var<'a>> {
-                todo!()
+            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+                self.root.as_mut().map(|x| match x {
+                    NodeOrBlock::Node(node) => node.globals(),
+                    NodeOrBlock::Block(b) => b.expr.globals()
+                })
+                    .unwrap_or(HashMap::new())
+            }
+        }
+
+        impl<'a> Node<'a> {
+            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+                match self {
+                    Node::Text(_) => HashMap::new(),
+                    Node::Tag(tag) => {
+                        let mut res = HashSet::new();
+                        let b0: Vec<HashSet<Var<'a>>> = tag.block.as_mut().map(|x| &x.children).unwrap_or(&vec![]).iter().map(|x| match x {
+                            NodeOrBlock::Node(n) => n.globals(),
+                            NodeOrBlock::Block(b) => b.expr.globals()
+                        }).collect();
+                        let b1: Vec<HashSet<Var<'a>>> = tag.attributes.iter().map(|x| match &x.value {
+                            AttributeValue::StrLit(_) => {
+                                HashMap::new()
+                            }
+                            AttributeValue::Block(b) => {
+                                b.expr.globals()
+                            }
+                        }).collect();
+                        for v in b0 {
+                            res.extend(v);
+                        }
+                        for v in b1 {
+                            res.extend(v);
+                        }
+                        res
+                    }
+
+                }
             }
         }
 
         impl<'a> Expr<'a> {
+
+            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+                match self {
+                    Expr::If(if0) => {
+                        let mut res = HashMap::new();
+                        res.extend(if0.condition.globals());
+                        res.extend(if0.then_branch.expr.globals());
+                        res.extend(if0.else_branch.1.expr.globals());
+                        for (_, _, cond, block) in &if0.elseif_branches {
+                            res.extend(cond.globals());
+                            res.extend(block.expr.globals());
+                        }
+                        res
+                    }
+                    Expr::For(for0) => {
+                        let mut res = HashMap::new();
+                        res.extend(for0.expr.globals());
+                        res.extend(for0.block.expr.globals());
+                        res
+                    }
+                    Expr::UnaryAp(un_ap) => un_ap.right.globals(),
+                    Expr::Lit(_) => HashMap::new(),
+                    Expr::Var(var) => {
+                        match var.scope {
+                            Scope::Global => HashMap::from([(var.name.text.span.value().to_string(), vec![var])]),
+                            Scope::Local => HashMap::new()
+                        }
+                    }
+                    Expr::Node(node) => node.globals(),
+                    Expr::Empty(_) => HashMap::new(),
+                    Expr::Group(group) => group.expr.globals(),
+                    Expr::BinaryAp(bin_ap) => {
+                        let mut res = HashSet::new();
+                        res.extend(bin_ap.left.globals());
+                        res.extend(bin_ap.right.right.globals());
+                        res
+                    },
+                    Expr::SelectorAp(sel_ap) => {
+                        let mut res = HashSet::new();
+                        res.extend(sel_ap.expr.globals());
+                        match &sel_ap.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => {
+                                res.extend(b.expr.globals());
+                            }
+                        }
+                        res
+                    }
+                    Expr::Ap(ap) => {
+                        let mut res = HashSet::new();
+                        res.extend(ap.expr.globals());
+                        for arg in ap.right.group.expr.args() {
+                            res.extend(arg.globals());
+                        }
+                        res
+                    }
+                }
+            }
 
             #[inline]
             pub fn typ(&self) -> &Type {
@@ -2612,6 +2731,22 @@ pub mod parse {
                 }
             }
         }
+
+        impl<'a> Eq for Var<'a> {}
+
+        impl<'a> PartialEq for Var<'a> {
+            fn eq(&self, other: &Self) -> bool {
+                self.scope == other.scope &&
+                self.typ == other.typ &&
+                self.name.text.span.value() == other.name.text.span.value()
+            }
+        }
+
+        impl<'a> Hash for Var<'a> {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.name.text.span.value().hash(state)
+            }
+        }
     }
 
     mod implementation {
@@ -2966,7 +3101,7 @@ pub mod parse {
                 let (mut parser, mut then_branch) = parser.parse::<Block>()?;
 
                 let mut elseif_branches = Vec::new();
-                let (parser, mut elseif_branches, mut else_branch) = loop {
+                let (parser, elseif_branches, else_branch) = loop {
                     let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
                     let (parser1, else0) = parser1.parse::<primitive::Else>()?;
                     let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
