@@ -1521,21 +1521,22 @@ pub mod parse {
         use std::cmp::Ordering;
         use std::collections::{BTreeMap, HashMap, HashSet};
         use std::hash::{Hash, Hasher};
-        use std::ops::Add;
+        use std::ops::{Add, Deref};
         use crate::rex::parse::{Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block, Error, Expr, For, If, Node, NodeOrBlock, primitive, Punctuated, SelectorAp, SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var};
         use crate::rex::parse::primitive::{Comma, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::View;
+        use crate::util::HashMultimap;
 
         #[derive(Clone, Debug, Hash)]
         pub enum AbstractType {
             Any,
+            // String, Number, IntLike, Float, Int, Bool
+            AddAndEq,
             // IntLike, Int, Bool, Float
             Number,
             // Int, Bool
-            IntLike,
-            // String, Number, IntLike, Float, Int, Bool
-            AddAndEq
+            IntLike
         }
         #[derive(Clone, Debug, PartialEq, Hash)]
         pub enum PrimitiveType {
@@ -1559,6 +1560,17 @@ pub mod parse {
         pub struct Typed;
 
         impl Typed {
+
+            fn min(vars: &HashSet<&mut Var>) -> Type {
+                let mut iter = vars.iter();
+                let mut min = iter.next().unwrap().typ.clone();
+                for var in iter {
+                    if var.typ < min {
+                        min = var.typ.clone();
+                    }
+                }
+                min
+            }
 
             pub fn un_ap<'a>(op: UnaryOp<'a>, mut right: Expr<'a>) -> Result<UnaryAp<'a>, Error> {
                 let mut right_typ = right.typ();
@@ -1809,7 +1821,7 @@ pub mod parse {
 
             pub fn r#if<'a>(
                 if0: primitive::If<'a>,
-                condition: Expr<'a>,
+                mut condition: Expr<'a>,
                 mut then_branch: Block<'a>,
                 mut elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
                 mut else_branch: (primitive::Else<'a>, Block<'a>)
@@ -1836,11 +1848,29 @@ pub mod parse {
                     }
                 }
 
-                // We must determine the minimum type for each global var and set all global
-                let cond0_globals = condition.globals();
-                let expr0_globals = then_branch.expr.globals();
+                // We must determine the minimum type for each global var and set all same vars to the same type
+                let mut all = condition.globals_mut();
+                all.union(then_branch.expr.globals_mut());
 
-                let expr0_globals = then_branch.expr.globals();
+                let else_if_globals: Vec<(HashMultimap<String, &mut Var<'a>>, HashMultimap<String, &mut Var<'a>>)> = elseif_branches.iter_mut()
+                    .map(|(_, _, cond, block)|
+                        (cond.globals_mut(), block.expr.globals_mut())
+                    )
+                    .collect();
+
+                for (cond_gl, block_gl) in else_if_globals {
+                    all.union(cond_gl);
+                    all.union(block_gl);
+                }
+                all.union(else_branch.1.expr.globals_mut());
+
+                for (_, vars) in all {
+                    if vars.len() <= 1 { continue; }
+                    let min_type = Self::min(&vars);
+                    for var in vars {
+                        var.typ = min_type.clone();
+                    }
+                }
 
                 Ok(If {
                     typ: Type::ANY,
@@ -1874,20 +1904,14 @@ pub mod parse {
                 let typ = Type::array(block.expr.typ().clone());
 
                 // Infer minimum type for global vars
-                let expr_globals = expr.globals();
-                let block_globals = block.expr.globals();
+                let mut all = expr.globals_mut();
+                all.union(block.expr.globals_mut());
 
-                for var in &expr_globals {
-                    match block_globals.get(var) {
-                        None => {}
-                        Some(other) => {
-                            if var.typ < other.typ {
-                                block.expr.infer_var(var.name.text.span.value(), &var.typ);
-                            }
-                            if other.typ < var.typ {
-                                expr.infer_var(var.name.text.span.value(), &other.typ);
-                            }
-                        }
+                for (_, vars) in all {
+                    if vars.len() <= 1 { continue; }
+                    let typ = Self::min(&vars);
+                    for var in vars {
+                        var.typ = typ.clone();
                     }
                 }
 
@@ -2046,7 +2070,6 @@ pub mod parse {
                 }
             }
 
-            #[inline]
             fn partial_cmp_attributes_helper(more: &BTreeMap<String, Type>, less: &BTreeMap<String, Type>) -> Option<Ordering> {
                 debug_assert!(more.len() >= less.len());
                 let mut covered = 0;
@@ -2085,7 +2108,6 @@ pub mod parse {
                 }
             }
 
-            #[inline]
             fn partial_cmp_arg_types(lhs: &Vec<Type>, rhs: &Vec<Type>) -> Option<Ordering> {
                 if lhs.len() != rhs.len() {
                     return None;
@@ -2119,14 +2141,121 @@ pub mod parse {
             }
         }
 
+        // TODO rework for function objects, object objects, unit types and arrays
         impl Add for &Type {
             type Output = Result<Type, Error>;
 
             fn add(self, rhs: Self) -> Self::Output {
-                //Self::check(types.as_ref())?;
-                todo!()
+                match self {
+                    Type::Abstract(left) => match rhs {
+                        Type::Abstract(right) => left + right,
+                        Type::Primitive(right) => right + left
+                    },
+                    Type::Primitive(left) => match rhs {
+                        Type::Abstract(right) => left + right,
+                        Type::Primitive(right) => left + right
+                    }
+                }
             }
         }
+
+        impl Add<&AbstractType> for &PrimitiveType {
+            type Output = Result<Type, Error>;
+
+            fn add(self, rhs: &AbstractType) -> Self::Output {
+                match rhs {
+                    AbstractType::Any => Ok(Type::Primitive(self.clone())),
+                    AbstractType::AddAndEq => match self {
+                        PrimitiveType::String | PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => {
+                            Ok(Type::Primitive(self.clone()))
+                        }
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
+                    }
+                    AbstractType::Number => match self {
+                        PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => {
+                            Ok(Type::Primitive(self.clone()))
+                        }
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
+                    }
+                    AbstractType::IntLike => match self {
+                        PrimitiveType::Int | PrimitiveType::Bool => {
+                            Ok(Type::Primitive(self.clone()))
+                        }
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
+                    }
+                }
+            }
+        }
+
+        impl Add for &PrimitiveType {
+            type Output = Result<Type, Error>;
+
+            fn add(self, rhs: Self) -> Self::Output {
+                match self {
+                    PrimitiveType::Function(left_args) => match rhs {
+                        PrimitiveType::Function(right_args) => {
+                            if left_args.len() != right_args.len() {
+                                return Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                            }
+                            let mut res_args = vec![];
+                            for (left, right) in left_args.iter().zip(right_args.iter()) {
+                                res_args.push((left + right)?);
+                            }
+                            Ok(Type::Primitive(PrimitiveType::Function(res_args)))
+                        },
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                    },
+                    PrimitiveType::Array(left) => match rhs {
+                        PrimitiveType::Array(right) => {
+                            Ok(Type::Primitive(PrimitiveType::Array(Box::new((left.as_ref() + right.as_ref())?))))
+                        },
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                    },
+                    PrimitiveType::Object(left) => match rhs {
+                        PrimitiveType::Object(right) => {
+                            let mut union = HashMultimap::from(left.clone());
+                            union.union_with_map(right.clone());
+                            let mut res = BTreeMap::new();
+                            for (key, set) in union.into_iter() {
+                                let mut set_iter = set.into_iter();
+                                let mut res_typ = set_iter.next().unwrap();
+                                for typ in set_iter {
+                                    res_typ = (&typ + &res_typ)?;
+                                }
+                                res.insert(key, res_typ);
+                            }
+                            Ok(Type::Primitive(PrimitiveType::Object(res)))
+                        }
+                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                    },
+                    _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                }
+            }
+        }
+
+        impl Add for &AbstractType {
+            type Output = Result<Type, Error>;
+
+            // Merges two abstract types to form the strictest new type of the two
+            fn add(self, rhs: Self) -> Self::Output {
+                match self {
+                    AbstractType::Any => Ok(Type::Abstract(rhs.clone())),
+                    AbstractType::AddAndEq => match rhs {
+                        AbstractType::Any | AbstractType::AddAndEq => Ok(Type::Abstract(AbstractType::AddAndEq)),
+                        AbstractType::Number => Ok(Type::Abstract(AbstractType::Number)),
+                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike))
+                    },
+                    AbstractType::Number => match rhs {
+                        AbstractType::Any | AbstractType::Number | AbstractType::AddAndEq => Ok(Type::Abstract(AbstractType::Number)),
+                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike))
+                    },
+                    AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike)),
+
+                }
+            }
+        }
+
+        impl Eq for Type {}
 
         impl PartialEq for Type {
             fn eq(&self, other: &Self) -> bool {
@@ -2189,9 +2318,13 @@ pub mod parse {
             }
         }
 
+
         impl PartialEq<Type> for AbstractType {
             fn eq(&self, other: &Type) -> bool {
-                todo!()
+                match other {
+                    Type::Abstract(abs) => abs == self,
+                    Type::Primitive(_) => return false
+                }
             }
         }
 
@@ -2242,38 +2375,81 @@ pub mod parse {
 
         impl<'a> View<'a> {
 
-            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+            pub fn globals_mut(&mut self) -> HashMultimap<String, &mut Var<'a>> {
                 self.root.as_mut().map(|x| match x {
+                    NodeOrBlock::Node(node) => node.globals_mut(),
+                    NodeOrBlock::Block(b) => b.expr.globals_mut()
+                })
+                    .unwrap_or(HashMultimap::new())
+            }
+
+            pub fn globals(&self) -> HashMultimap<String, &Var<'a>> {
+                self.root.as_ref().map(|x| match x {
                     NodeOrBlock::Node(node) => node.globals(),
                     NodeOrBlock::Block(b) => b.expr.globals()
                 })
-                    .unwrap_or(HashMap::new())
+                    .unwrap_or(HashMultimap::new())
             }
         }
 
         impl<'a> Node<'a> {
-            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+            pub fn globals_mut(&mut self) -> HashMultimap<String, &mut Var<'a>> {
+                let mut res = HashMultimap::new();
                 match self {
-                    Node::Text(_) => HashMap::new(),
+                    Node::Text(_) => res,
                     Node::Tag(tag) => {
-                        let mut res = HashSet::new();
-                        let b0: Vec<HashSet<Var<'a>>> = tag.block.as_mut().map(|x| &x.children).unwrap_or(&vec![]).iter().map(|x| match x {
-                            NodeOrBlock::Node(n) => n.globals(),
-                            NodeOrBlock::Block(b) => b.expr.globals()
-                        }).collect();
-                        let b1: Vec<HashSet<Var<'a>>> = tag.attributes.iter().map(|x| match &x.value {
-                            AttributeValue::StrLit(_) => {
-                                HashMap::new()
+                        let mut res = HashMultimap::new();
+                        for attr in &mut tag.attributes {
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => {
+                                    res.extend(block.expr.globals_mut());
+                                }
                             }
-                            AttributeValue::Block(b) => {
-                                b.expr.globals()
-                            }
-                        }).collect();
-                        for v in b0 {
-                            res.extend(v);
                         }
-                        for v in b1 {
-                            res.extend(v);
+                        if let Some(block) = &mut tag.block {
+                            for child in &mut block.children {
+                                match child {
+                                    NodeOrBlock::Node(node) => {
+                                        res.extend(node.globals_mut());
+                                    }
+                                    NodeOrBlock::Block(b) => {
+                                        res.extend(b.expr.globals_mut());
+                                    }
+                                }
+                            }
+                        }
+                        res
+                    }
+
+                }
+            }
+
+            pub fn globals(&self) -> HashMultimap<String, &Var<'a>> {
+                let mut res = HashMultimap::new();
+                match self {
+                    Node::Text(_) => res,
+                    Node::Tag(tag) => {
+                        let mut res = HashMultimap::new();
+                        for attr in &tag.attributes {
+                            match &attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => {
+                                    res.extend(block.expr.globals());
+                                }
+                            }
+                        }
+                        if let Some(block) = &tag.block {
+                            for child in &block.children {
+                                match child {
+                                    NodeOrBlock::Node(node) => {
+                                        res.extend(node.globals());
+                                    }
+                                    NodeOrBlock::Block(b) => {
+                                        res.extend(b.expr.globals());
+                                    }
+                                }
+                            }
                         }
                         res
                     }
@@ -2284,10 +2460,10 @@ pub mod parse {
 
         impl<'a> Expr<'a> {
 
-            pub fn globals(&mut self) -> HashMap<String, Vec<&mut Var<'a>>> {
+            pub fn globals(&self) -> HashMultimap<String, &Var<'a>> {
                 match self {
                     Expr::If(if0) => {
-                        let mut res = HashMap::new();
+                        let mut res = HashMultimap::new();
                         res.extend(if0.condition.globals());
                         res.extend(if0.then_branch.expr.globals());
                         res.extend(if0.else_branch.1.expr.globals());
@@ -2298,30 +2474,30 @@ pub mod parse {
                         res
                     }
                     Expr::For(for0) => {
-                        let mut res = HashMap::new();
+                        let mut res = HashMultimap::new();
                         res.extend(for0.expr.globals());
                         res.extend(for0.block.expr.globals());
                         res
                     }
                     Expr::UnaryAp(un_ap) => un_ap.right.globals(),
-                    Expr::Lit(_) => HashMap::new(),
+                    Expr::Lit(_) => HashMultimap::new(),
                     Expr::Var(var) => {
                         match var.scope {
-                            Scope::Global => HashMap::from([(var.name.text.span.value().to_string(), vec![var])]),
-                            Scope::Local => HashMap::new()
+                            Scope::Global => HashMultimap::from([(var.name.text.span.value().to_string(), vec![var])]),
+                            Scope::Local => HashMultimap::new()
                         }
                     }
                     Expr::Node(node) => node.globals(),
-                    Expr::Empty(_) => HashMap::new(),
+                    Expr::Empty(_) => HashMultimap::new(),
                     Expr::Group(group) => group.expr.globals(),
                     Expr::BinaryAp(bin_ap) => {
-                        let mut res = HashSet::new();
+                        let mut res = HashMultimap::new();
                         res.extend(bin_ap.left.globals());
                         res.extend(bin_ap.right.right.globals());
                         res
                     },
                     Expr::SelectorAp(sel_ap) => {
-                        let mut res = HashSet::new();
+                        let mut res = HashMultimap::new();
                         res.extend(sel_ap.expr.globals());
                         match &sel_ap.right.selector {
                             SelectorOp::Named(_) => {}
@@ -2332,10 +2508,68 @@ pub mod parse {
                         res
                     }
                     Expr::Ap(ap) => {
-                        let mut res = HashSet::new();
+                        let mut res = HashMultimap::new();
                         res.extend(ap.expr.globals());
                         for arg in ap.right.group.expr.args() {
                             res.extend(arg.globals());
+                        }
+                        res
+                    }
+                }
+            }
+
+            pub fn globals_mut(&mut self) -> HashMultimap<String, &mut Var<'a>> {
+                match self {
+                    Expr::If(if0) => {
+                        let mut res = HashMultimap::new();
+                        res.extend(if0.condition.globals_mut());
+                        res.extend(if0.then_branch.expr.globals_mut());
+                        res.extend(if0.else_branch.1.expr.globals_mut());
+                        for (_, _, cond, block) in &mut if0.elseif_branches {
+                            res.extend(cond.globals_mut());
+                            res.extend(block.expr.globals_mut());
+                        }
+                        res
+                    }
+                    Expr::For(for0) => {
+                        let mut res = HashMultimap::new();
+                        res.extend(for0.expr.globals_mut());
+                        res.extend(for0.block.expr.globals_mut());
+                        res
+                    }
+                    Expr::UnaryAp(un_ap) => un_ap.right.globals_mut(),
+                    Expr::Lit(_) => HashMultimap::new(),
+                    Expr::Var(var) => {
+                        match var.scope {
+                            Scope::Global => HashMultimap::from([(var.name.text.span.value().to_string(), vec![var])]),
+                            Scope::Local => HashMultimap::new()
+                        }
+                    }
+                    Expr::Node(node) => node.globals_mut(),
+                    Expr::Empty(_) => HashMultimap::new(),
+                    Expr::Group(group) => group.expr.globals_mut(),
+                    Expr::BinaryAp(bin_ap) => {
+                        let mut res = HashMultimap::new();
+                        res.extend(bin_ap.left.globals_mut());
+                        res.extend(bin_ap.right.right.globals_mut());
+                        res
+                    },
+                    Expr::SelectorAp(sel_ap) => {
+                        let mut res = HashMultimap::new();
+                        res.extend(sel_ap.expr.globals_mut());
+                        match &mut sel_ap.right.selector {
+                            SelectorOp::Named(_) => {}
+                            SelectorOp::Bracket(b) => {
+                                res.extend(b.expr.globals_mut());
+                            }
+                        }
+                        res
+                    }
+                    Expr::Ap(ap) => {
+                        let mut res = HashMultimap::new();
+                        res.extend(ap.expr.globals_mut());
+                        for arg in ap.right.group.expr.args_mut() {
+                            res.extend(arg.globals_mut());
                         }
                         res
                     }

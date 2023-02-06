@@ -14,7 +14,7 @@ pub use rex::lex;
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
-    let mut lexer = rex::lex::Lexer::new(code);
+    let mut lexer = lex::Lexer::new(code);
 
 /*
     let mut tokens = vec![];

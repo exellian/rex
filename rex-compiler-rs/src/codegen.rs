@@ -236,13 +236,66 @@ pub mod rs {
     pub struct RsCodegen;
 
     mod implementation {
-        use std::collections::HashSet;
+        use std::collections::{BTreeMap, HashMap, HashSet};
         use crate::codegen::rs::RsCodegen;
         use crate::rex::parse::{Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, UnaryAp, UnaryOp, Var};
         use crate::rex::parse::primitive::{Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::{AbstractType, PrimitiveType, Type};
         use crate::rex::View;
+        use crate::util::HashMultimap;
+
+        struct Structs {
+            structs: HashMap<BTreeMap<String, Type>, String>,
+            name_counts: HashMap<String, usize>,
+            anonymous_count: usize
+        }
+
+        impl Structs {
+
+            pub fn new() -> Self {
+                Structs {
+                    structs: HashMap::new(),
+                    name_counts: HashMap::new(),
+                    anonymous_count: 0,
+                }
+            }
+
+            fn get_anonymous_name(&mut self) -> String {
+                let res = format!("A{}", self.anonymous_count);
+                self.anonymous_count += 1;
+                res
+            }
+
+            pub fn get_name(&mut self, mapping: &BTreeMap<String, Type>, prop_name_opt: Option<String>) -> String {
+                match self.structs.get(mapping) {
+                    None => {}
+                    Some(name) => return name.clone()
+                }
+                let prop_name = if let Some(n) = prop_name_opt {
+                    n
+                } else {
+                    self.get_anonymous_name()
+                };
+                let mut prop_name_iter = prop_name.chars();
+                let first = prop_name_iter.next().unwrap().to_uppercase();
+                let rest: String = prop_name_iter.collect();
+                let prefix = format!("{}{}", first, rest);
+                let postfix = match self.name_counts.get_mut(&prefix) {
+                    None => {
+                        self.name_counts.insert(prefix.clone(), 1);
+                        "".to_string()
+                    }
+                    Some(count) => {
+                        *count += 1;
+                        format!("{}", count)
+                    }
+                };
+                let name = format!("{}{}", prefix, postfix);
+                self.structs.insert(mapping.clone(), name.clone());
+                name
+            }
+        }
 
         struct Generics {
             generics: Vec<(String, Option<String>)>,
@@ -412,7 +465,7 @@ pub mod rs {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
                     AttributeValue::Block(block) => Self::generate_expr(&block.expr, true)
                 };
-                format!("({}, || {})", attr.name.text.span.value(), value)
+                format!("({}, || {{{}}})", attr.name.text.span.value(), value)
             }
 
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
@@ -437,7 +490,7 @@ pub mod rs {
                                 children.push_str(",");
                             }
 
-                            children.push_str(&format!("|| {}", e));
+                            children.push_str(&format!("|| {{{}}}", e));
                             i += 1;
                         }
                         format!("config.{}(\"{}\", {}, vec![{}])", el_name, tag_name, attrs, children)
@@ -472,7 +525,7 @@ pub mod rs {
                 }
             }
 
-            fn generate_type(generics: &mut Generics, typ: &Type) -> String {
+            fn generate_type(generics: &mut Generics, structs: &mut Structs, parent: Option<String>, typ: &Type) -> String {
 
                 match typ {
                     Type::Abstract(abs) => match abs {
@@ -483,16 +536,18 @@ pub mod rs {
                     }
                     Type::Primitive(prim) => match prim {
                         PrimitiveType::Function(arg_types) => {
-                            let args: Vec<String> = arg_types.iter().map(|typ| Self::generate_type(generics, typ)).collect();
+                            let args: Vec<String> = arg_types.iter().map(|typ| Self::generate_type(generics, structs, None, typ)).collect();
                             let arg_list = args[0..args.len() - 1].join(",");
                             generics.next(Some(&format!("fn({}) -> {}", arg_list, args[args.len() - 1])))
                         }
                         PrimitiveType::Unit => "()".into(),
                         PrimitiveType::Array(inner) => {
-                            let inner = Self::generate_type(generics, inner);
+                            let inner = Self::generate_type(generics, structs, None, inner);
                             format!("Vec<{}>", inner)
                         }
-                        PrimitiveType::Object(_) => "".into(),
+                        PrimitiveType::Object(mapping) => {
+                            structs.get_name(mapping, parent)
+                        },
                         PrimitiveType::String => "String".into(),
                         PrimitiveType::Int => "i32".into(),
                         PrimitiveType::Float => "f32".into(),
@@ -502,23 +557,46 @@ pub mod rs {
                 }
             }
 
-            fn generate_props_struct(globals: &HashSet<Var>) -> String {
+            fn generate_struct(structs: &mut Structs, name: &str, mapping: &BTreeMap<String, Type>) -> String {
                 let mut generics = Generics::new();
                 let mut str = String::new();
-                str.push_str("struct Props {");
-                for var in globals {
-                    str.push_str(&format!("{}: {}", var.name.text.span.value(), Self::generate_type(&mut generics, &var.typ)));
+                str.push_str(&format!("struct {} {{", name));
+                for (prop_name, prop_type) in mapping {
+                    str.push_str(&format!("{}: {}", prop_name, Self::generate_type(&mut generics, structs, Some(prop_name.clone()), prop_type)));
                 }
                 str.push_str("}");
                 str
             }
 
+            pub fn generate_globals_mapping(globals: HashMultimap<String, &Var>) -> BTreeMap<String, Type> {
+                globals.into_iter()
+                    .map(|(name, set)| (name, set.iter().next().unwrap().typ.clone()))
+                    .collect()
+            }
+
             pub fn generate(&self, view: &View) -> String {
                 let mut str = String::new();
-                let globals = view.globals();
+                let mut structs = Structs::new();
+                let globals = Self::generate_globals_mapping(view.globals());
                 println!("{:?}", globals);
-                let props_struct = Self::generate_props_struct(&globals);
-                str.push_str(&format!("{} fn render(props: &Props, config: &rex::Config) {{", props_struct));
+                let props_struct = Self::generate_struct(&mut structs, "Props", &globals);
+
+                let mut struct_defs = String::new();
+                // Do a fix point iteration for the structs
+                loop {
+                    let before_size = structs.structs.len();
+
+                    for (fields, name) in structs.structs.clone() {
+                        let code = Self::generate_struct(&mut structs, &name, &fields);
+                        struct_defs.push_str(&code);
+                    }
+
+                    if before_size == structs.structs.len() {
+                        break;
+                    }
+                }
+
+                str.push_str(&format!("{} {} fn render(props: &Props, config: &rex::Config) {{", struct_defs, props_struct));
                 match &view.root {
                     None => {},
                     Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob, false))
