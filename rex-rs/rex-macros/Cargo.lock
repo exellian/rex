@@ -106,7 +106,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rex-rs"
+name = "rex-macros"
 version = "0.1.0"
 dependencies = [
  "structx",

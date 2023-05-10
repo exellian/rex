@@ -11,6 +11,7 @@ pub mod rex;
 pub mod codegen;
 
 pub use rex::lex;
+use crate::codegen::rs::RsCodegen;
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
@@ -32,8 +33,8 @@ fn main() {
     let (_, view) = parser.parse::<View>().unwrap();
     println!("{:#?}", view);
 
-    let js = JsCodegen::new();
-    let res = js.generate(&view);
+    let rs = RsCodegen::new();
+    let res = rs.generate(&view);
     std::fs::create_dir_all("test-out/").unwrap();
     let mut out = File::create("test-out/test.rs").unwrap();
     out.write_all(res.as_bytes()).unwrap();
