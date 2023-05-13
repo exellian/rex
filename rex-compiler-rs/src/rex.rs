@@ -1367,7 +1367,7 @@ pub mod parse {
         pub right: primitive::BraceRight<'a>
     }
     // Order of expr members is important
-    // it is also the order in which expr a tried to parsed
+    // it is also the order in which expressions are tried to be parsed
     #[derive(Debug)]
     pub enum Expr<'a> {
         If(If<'a>),

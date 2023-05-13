@@ -49,13 +49,13 @@ pub mod js {
                 }
             }
 
-            fn generate_punctuated_expr(mut punct: &Punctuated<Expr, Comma>, in_attr: bool) -> String {
+            fn generate_punctuated_expr(mut punct: &Punctuated<Expr, Comma>) -> String {
                 let mut str = String::new();
-                let e = Self::generate_expr(&punct.expr, in_attr);
+                let e = Self::generate_expr(&punct.expr);
                 str.push_str(&e);
                 let mut other = &punct.other;
                 while let Some((_, o)) = other {
-                    let e = Self::generate_expr(&o.expr, in_attr);
+                    let e = Self::generate_expr(&o.expr);
                     str.push_str(",");
                     str.push_str(&e);
                     other = &o.other
@@ -63,16 +63,16 @@ pub mod js {
                 str
             }
 
-            fn generate_if(expr: &If, in_attr: bool) -> String {
+            fn generate_if(expr: &If) -> String {
                 let mut str = String::new();
                 let mut inner = String::new();
-                let mut condition = Self::generate_expr(&expr.condition, in_attr);
-                let mut if_inner = Self::generate_expr(&expr.then_branch.expr, in_attr);
-                let mut else_inner = Self::generate_expr(&expr.else_branch.1.expr, in_attr);
+                let mut condition = Self::generate_expr(&expr.condition);
+                let mut if_inner = Self::generate_expr(&expr.then_branch.expr);
+                let mut else_inner = Self::generate_expr(&expr.else_branch.1.expr);
                 let mut else_ifs = String::new();
                 for (_, _, cond, block) in &expr.elseif_branches {
-                    let mut condition = Self::generate_expr(&cond, in_attr);
-                    let mut if_inner = Self::generate_expr(&block.expr, in_attr);
+                    let mut condition = Self::generate_expr(&cond);
+                    let mut if_inner = Self::generate_expr(&block.expr);
                     else_ifs.push_str(&format!("else if ({}) {{return {};}}", condition, if_inner));
                 }
                 inner.push_str(&format!("if({}){{return {};}}{}else{{return {};}}", condition, if_inner, else_ifs, else_inner));
@@ -80,16 +80,16 @@ pub mod js {
                 str
             }
 
-            fn generate_for(expr: &For, in_attr: bool) -> String {
+            fn generate_for(expr: &For) -> String {
                 let mut str = String::new();
-                let binding = Self::generate_var(&expr.binding, in_attr);
-                let arr = Self::generate_expr(&expr.expr, in_attr);
-                let  inner = Self::generate_expr(&expr.block.expr, in_attr);
-                str.push_str(&format!("({}).iter().map(({}) => {{return {};}})", arr, binding, inner));
+                let binding = Self::generate_var(&expr.binding);
+                let arr = Self::generate_expr(&expr.expr);
+                let  inner = Self::generate_expr(&expr.block.expr);
+                str.push_str(&format!("({}).map(({}) => {{return {};}})", arr, binding, inner));
                 str
             }
-            fn generate_un_ap(expr: &UnaryAp, in_attr: bool) -> String {
-                let e = Self::generate_expr(&expr.right, in_attr);
+            fn generate_un_ap(expr: &UnaryAp) -> String {
+                let e = Self::generate_expr(&expr.right);
                 let op = Self::generate_un_op(&expr.op);
                 format!("{}({})", op, e)
             }
@@ -101,53 +101,53 @@ pub mod js {
                     Lit::Bool(b) => b.text.span.value().to_string(),
                 }
             }
-            fn generate_var(expr: &Var, in_attr: bool) -> String {
+            fn generate_var(expr: &Var) -> String {
                 let prefix = if expr.scope == Scope::Global { "props." } else { "" };
                 format!("{}{}", prefix, expr.name.text.span.value())
             }
-            fn generate_group_expr(expr: &Group<Expr>, in_attr: bool) -> String {
-                let inner = Self::generate_expr(&expr.expr, in_attr);
+            fn generate_group_expr(expr: &Group<Expr>) -> String {
+                let inner = Self::generate_expr(&expr.expr);
                 format!("({})", inner)
             }
-            fn generate_bin_ap(expr: &BinaryAp, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.left, in_attr);
+            fn generate_bin_ap(expr: &BinaryAp) -> String {
+                let left = Self::generate_expr(&expr.left);
                 let op = Self::generate_bin_op(&expr.right.op);
-                let right = Self::generate_expr(&expr.right.right, in_attr);
+                let right = Self::generate_expr(&expr.right.right);
                 format!("{} {} {}", left, op, right)
             }
-            fn generate_sel_ap(expr: &SelectorAp, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, in_attr);
+            fn generate_sel_ap(expr: &SelectorAp) -> String {
+                let left = Self::generate_expr(&expr.expr);
                 let right = match &expr.right.selector {
                     SelectorOp::Named(named) => format!(".{}", named.name.text.span.value()),
                     SelectorOp::Bracket(bracket) => {
-                        let inner = Self::generate_expr(&bracket.expr, in_attr);
+                        let inner = Self::generate_expr(&bracket.expr);
                         format!("[{}]", inner)
                     }
                 };
                 format!("({}){}", left, right)
             }
-            fn generate_ap(expr: &Ap, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, in_attr);
-                let args = Self::generate_punctuated_expr(&expr.right.group.expr, in_attr);
+            fn generate_ap(expr: &Ap) -> String {
+                let left = Self::generate_expr(&expr.expr);
+                let args = Self::generate_punctuated_expr(&expr.right.group.expr);
                 format!("({})({})", left, args)
             }
             fn generate_empty(empty: &Empty) -> String  {
                 "undefined".to_string()
             }
 
-            fn generate_expr(expr: &Expr, in_attr: bool) -> String {
+            fn generate_expr(expr: &Expr) -> String {
                 match expr {
-                    Expr::If(if0) => Self::generate_if(if0, in_attr),
-                    Expr::For(for0) => Self::generate_for(for0, in_attr),
-                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap, in_attr),
+                    Expr::If(if0) => Self::generate_if(if0),
+                    Expr::For(for0) => Self::generate_for(for0),
+                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap),
                     Expr::Lit(lit) => Self::generate_lit(lit),
-                    Expr::Var(var) => Self::generate_var(var, in_attr),
-                    Expr::Node(node) => Self::generate_node(node, in_attr),
+                    Expr::Var(var) => Self::generate_var(var),
+                    Expr::Node(node) => Self::generate_node(node),
                     Expr::Empty(empty) => Self::generate_empty(empty),
-                    Expr::Group(group) => Self::generate_group_expr(group, in_attr),
-                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap, in_attr),
-                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap, in_attr),
-                    Expr::Ap(ap) => Self::generate_ap(ap, in_attr)
+                    Expr::Group(group) => Self::generate_group_expr(group),
+                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap),
+                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap),
+                    Expr::Ap(ap) => Self::generate_ap(ap)
                 }
             }
 
@@ -155,7 +155,7 @@ pub mod js {
             fn generate_attribute(attr: &Attribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
-                    AttributeValue::Block(block) => Self::generate_expr(&block.expr, true)
+                    AttributeValue::Block(block) => Self::generate_expr(&block.expr)
                 };
                 format!("{}: () => {}", attr.name.text.span.value(), value)
             }
@@ -168,16 +168,16 @@ pub mod js {
                 format!("{{{}}}", inner)
             }
 
-            fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
+            fn generate_tag(tag: &TagNode) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
-                let el_name = if in_attr { "el" } else { "domEl" };
+                let el_name = "el";
                 match &tag.block {
                     Some(tag_block) => {
                         let mut children = String::new();
                         let mut i = 0;
                         for child in &tag_block.children {
-                            let e = Self::generate_node_or_block(&child, in_attr);
+                            let e = Self::generate_node_or_block(&child);
                             if i != 0 {
                                 children.push_str(",");
                             }
@@ -193,27 +193,27 @@ pub mod js {
                 }
             }
 
-            pub fn generate_node(nob: &Node, in_attr: bool) -> String {
-                let text_name = if in_attr { "text" } else { "domText" };
+            pub fn generate_node(nob: &Node) -> String {
+                let text_name = "text";
                 match nob {
                     Node::Text(text) => {
                         let mut str = String::new();
                         str.push_str(&format!("config.{}(`{}`)", text_name, Self::escape(text.text.span.value())));
                         str
                     },
-                    Node::Tag(tag) => Self::generate_tag(tag, in_attr)
+                    Node::Tag(tag) => Self::generate_tag(tag)
                 }
             }
 
-            pub fn generate_block(nob: &Block, in_attr: bool) -> String {
-                Self::generate_expr(&nob.expr, in_attr)
+            pub fn generate_block(nob: &Block) -> String {
+                Self::generate_expr(&nob.expr)
             }
 
 
-            pub fn generate_node_or_block(nob: &NodeOrBlock, in_attr: bool) -> String {
+            pub fn generate_node_or_block(nob: &NodeOrBlock) -> String {
                 match nob {
-                    NodeOrBlock::Node(node) => Self::generate_node(node, in_attr),
-                    NodeOrBlock::Block(block) => Self::generate_block(block, in_attr)
+                    NodeOrBlock::Node(node) => Self::generate_node(node),
+                    NodeOrBlock::Block(block) => Self::generate_block(block)
                 }
             }
 
@@ -222,7 +222,7 @@ pub mod js {
                 str.push_str(&format!("module.exports = {{render: function(props, config) {{return "));
                 match &view.root {
                     None => {},
-                    Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob, false))
+                    Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob))
                 }
                 str.push_str(";}}");
                 str
@@ -237,8 +237,9 @@ pub mod rs {
 
     mod implementation {
         use std::collections::{BTreeMap, HashMap, HashSet};
+        use std::convert;
         use crate::codegen::rs::RsCodegen;
-        use crate::rex::parse::{Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, UnaryAp, UnaryOp, Var};
+        use crate::rex::parse::{Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, TextNode, UnaryAp, UnaryOp, Var};
         use crate::rex::parse::primitive::{Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::{AbstractType, PrimitiveType, Type};
@@ -351,6 +352,16 @@ pub mod rs {
                 str.to_string()
             }
 
+            fn is_flattenable_node(typ: &Type) -> bool {
+                if let Type::Primitive(PrimitiveType::Node) = typ {
+                    return true;
+                }
+                if let Type::Primitive(PrimitiveType::Array(inner_typ)) = typ {
+                    return Self::is_flattenable_node(&*inner_typ);
+                }
+                return false;
+            }
+
             fn generate_un_op(un_op: &UnaryOp) -> String {
                 match un_op {
                     UnaryOp::Neg(_) => "-".to_string(),
@@ -379,13 +390,13 @@ pub mod rs {
                 }
             }
 
-            fn generate_punctuated_expr(mut punct: &Punctuated<Expr, Comma>, in_attr: bool) -> String {
+            fn generate_punctuated_expr(mut punct: &Punctuated<Expr, Comma>) -> String {
                 let mut str = String::new();
-                let e = Self::generate_expr(&punct.expr, in_attr);
+                let e = Self::generate_expr(&punct.expr);
                 str.push_str(&e);
                 let mut other = &punct.other;
                 while let Some((_, o)) = other {
-                    let e = Self::generate_expr(&o.expr, in_attr);
+                    let e = Self::generate_expr(&o.expr);
                     str.push_str(",");
                     str.push_str(&e);
                     other = &o.other
@@ -393,34 +404,35 @@ pub mod rs {
                 str
             }
 
-            fn generate_if(expr: &If, in_attr: bool) -> String {
+            fn generate_if(expr: &If) -> String {
                 let mut str = String::new();
-                let condition = Self::generate_expr(&expr.condition, in_attr);
-                let if_inner = Self::generate_expr(&expr.then_branch.expr, in_attr);
-                let else_inner = Self::generate_expr(&expr.else_branch.1.expr, in_attr);
+                let condition = Self::generate_expr(&expr.condition);
+                let if_inner = Self::generate_expr(&expr.then_branch.expr);
+                let else_inner = Self::generate_expr(&expr.else_branch.1.expr);
                 let mut else_ifs = String::new();
                 for (_, _, cond, block) in &expr.elseif_branches {
-                    let mut condition = Self::generate_expr(&cond, in_attr);
-                    let mut if_inner = Self::generate_expr(&block.expr, in_attr);
+                    let mut condition = Self::generate_expr(&cond);
+                    let mut if_inner = Self::generate_expr(&block.expr);
                     else_ifs.push_str(&format!("else if {} {{{}}}", condition, if_inner));
                 }
                 str.push_str(&format!("if{} {{{}}}{}else{{{}}}", condition, if_inner, else_ifs, else_inner));
                 str
             }
 
-            fn generate_for(expr: &For, in_attr: bool) -> String {
-                let mut str = String::new();
-                let binding = Self::generate_var(&expr.binding, in_attr);
-                let arr = Self::generate_expr(&expr.expr, in_attr);
-                let inner = Self::generate_expr(&expr.block.expr, in_attr);
-                str.push_str(&format!("({}).iter().flat_map(|{}| {{{}}}).collect::<Vec<_>>()", arr, binding, inner));
-                str
+            fn generate_for(expr: &For) -> String {
+                let binding = Self::generate_var(&expr.binding, false);
+                let arr = Self::generate_expr(&expr.expr);
+                let inner = Self::generate_expr(&expr.block.expr);
+                assert!(expr.expr.typ().is_array());
+                format!("({}).into_iter().map(|{}| {{{}}}).collect::<Vec<_>>()", arr, binding, inner)
             }
-            fn generate_un_ap(expr: &UnaryAp, in_attr: bool) -> String {
-                let e = Self::generate_expr(&expr.right, in_attr);
+
+            fn generate_un_ap(expr: &UnaryAp) -> String {
+                let e = Self::generate_expr(&expr.right);
                 let op = Self::generate_un_op(&expr.op);
-                format!("[{}({})]", op, e)
+                format!("{}({})", op, e)
             }
+
             fn generate_lit(expr: &Lit) -> String {
                 match expr {
                     Lit::Str(str) => str.lit.span.value().to_string(),
@@ -429,62 +441,64 @@ pub mod rs {
                     Lit::Bool(b) => b.text.span.value().to_string(),
                 }
             }
-            fn generate_var(expr: &Var, in_attr: bool) -> String {
+            fn generate_var(expr: &Var, as_ref: bool) -> String {
                 let prefix = if expr.scope == Scope::Global { "props." } else { "" };
-                format!("[{}{}]", prefix, expr.name.text.span.value())
+                let ref_prefix = if as_ref { "&" } else { "" };
+                let res = format!("{}{}{}", ref_prefix, prefix, expr.name.text.span.value());
+                res
             }
-            fn generate_group_expr(expr: &Group<Expr>, in_attr: bool) -> String {
-                let inner = Self::generate_expr(&expr.expr, in_attr);
+            fn generate_group_expr(expr: &Group<Expr>) -> String {
+                let inner = Self::generate_expr(&expr.expr);
                 format!("({})", inner)
             }
-            fn generate_bin_ap(expr: &BinaryAp, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.left, in_attr);
+            fn generate_bin_ap(expr: &BinaryAp) -> String {
+                let left = Self::generate_expr(&expr.left);
                 let op = Self::generate_bin_op(&expr.right.op);
-                let right = Self::generate_expr(&expr.right.right, in_attr);
-                format!("[{} {} {}]", left, op, right)
+                let right = Self::generate_expr(&expr.right.right);
+                format!("({} {} {})", left, op, right)
             }
-            fn generate_sel_ap(expr: &SelectorAp, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, in_attr);
+            fn generate_sel_ap(expr: &SelectorAp) -> String {
+                let left = Self::generate_expr(&expr.expr);
                 let right = match &expr.right.selector {
                     SelectorOp::Named(named) => format!(".{}", named.name.text.span.value()),
                     SelectorOp::Bracket(bracket) => {
-                        let inner = Self::generate_expr(&bracket.expr, in_attr);
-                        format!("[{}[0]]", inner)
+                        let inner = Self::generate_expr(&bracket.expr);
+                        format!("{}[0]", inner)
                     }
                 };
-                format!("[({}){}]", left, right)
+                format!("&({}){}", left, right)
             }
-            fn generate_ap(expr: &Ap, in_attr: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, in_attr);
-                let args = Self::generate_punctuated_expr(&expr.right.group.expr, in_attr);
-                format!("[({})({})]", left, args)
+            fn generate_ap(expr: &Ap) -> String {
+                let left = Self::generate_expr(&expr.expr);
+                let args = Self::generate_punctuated_expr(&expr.right.group.expr);
+                format!("({})({})", left, args)
             }
             fn generate_empty(_: &Empty) -> String  {
                 "()".to_string()
             }
 
-            fn generate_expr(expr: &Expr, in_attr: bool) -> String {
+            fn generate_expr(expr: &Expr) -> String {
                 match expr {
-                    Expr::If(if0) => Self::generate_if(if0, in_attr),
-                    Expr::For(for0) => Self::generate_for(for0, in_attr),
-                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap, in_attr),
+                    Expr::If(if0) => Self::generate_if(if0),
+                    Expr::For(for0) => Self::generate_for(for0),
+                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap),
                     Expr::Lit(lit) => Self::generate_lit(lit),
-                    Expr::Var(var) => Self::generate_var(var, in_attr),
-                    Expr::Node(node) => Self::generate_node(node, in_attr),
+                    Expr::Var(var) => Self::generate_var(var, true),
+                    Expr::Node(node) => Self::generate_node(node),
                     Expr::Empty(empty) => Self::generate_empty(empty),
-                    Expr::Group(group) => Self::generate_group_expr(group, in_attr),
-                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap, in_attr),
-                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap, in_attr),
-                    Expr::Ap(ap) => Self::generate_ap(ap, in_attr)
+                    Expr::Group(group) => Self::generate_group_expr(group),
+                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap),
+                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap),
+                    Expr::Ap(ap) => Self::generate_ap(ap)
                 }
             }
 
             fn generate_attribute(attr: &Attribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
-                    AttributeValue::Block(block) => Self::generate_expr(&block.expr, true)
+                    AttributeValue::Block(block) => Self::generate_expr(&block.expr)
                 };
-                format!("(\"{}\".to_string(), Box::new(|| {{ Box::new({}) as BoxedObject<'props> }}) as BoxedObjectFn<'props>)", attr.name.text.span.value(), value)
+                format!("(\"{}\".to_string(), Box::new(|| {{ Box::new({}) as AttributeValue<'props> }}) as AttributeFn<'props>)", attr.name.text.span.value(), value)
             }
 
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
@@ -495,51 +509,54 @@ pub mod rs {
                 format!("HashMap::from([{}])", inner)
             }
 
-            fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
+            fn generate_tag(tag: &TagNode) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
-                let el_name = if in_attr { "el" } else { "dom_el" };
-                match &tag.block {
+                let node = match &tag.block {
                     Some(tag_block) => {
-                        let mut children = String::new();
+                        let mut children = vec![];
                         let mut i = 0;
                         for child in &tag_block.children {
-                            let e = Self::generate_node_or_block(&child, in_attr);
-                            if i != 0 {
-                                children.push_str(",");
+                            let typ = match child {
+                                NodeOrBlock::Node(_) => &Type::NODE,
+                                NodeOrBlock::Block(b) => b.expr.typ()
+                            };
+                            let mut e = Self::generate_node_or_block(&child);
+                            if !Self::is_flattenable_node(typ) {
+                                e = format!("(config.text)(&({}).render())", e);
                             }
-                            children.push_str(&format!("Box::new(|| {{ Box::new({}) as BoxedObject<'props> }}) as BoxedObjectFn<'props> ", e));
+                            children.push(format!("Box::new(|| {{ Box::new({}) as ChildValue<'props, NODE> }}) as ChildFn<'props, NODE>", e));
                             i += 1;
                         }
-                        format!("(config.{})(\"{}\", {}, vec![{}])", el_name, tag_name, attrs, children)
+                        format!("(config.el)(\"{}\", {}, vec![{}])", tag_name, attrs, children.join(",\n"))
                     },
                     None => {
-                        format!("(config.{})(\"{}\", {})", el_name, tag_name, attrs)
+                        format!("(config.el)(\"{}\", {})", tag_name, attrs)
                     }
+                };
+                node
+            }
+
+            pub fn generate_text_node(text: &TextNode) -> String {
+                format!("(config.text)(\"{}\")", Self::escape(text.text.span.value()))
+            }
+
+            pub fn generate_node(node: &Node) -> String {
+                match node {
+                    Node::Text(text) => Self::generate_text_node(text),
+                    Node::Tag(tag) => Self::generate_tag(tag)
                 }
             }
 
-            pub fn generate_node(nob: &Node, in_attr: bool) -> String {
-                let text_name = if in_attr { "text" } else { "dom_text" };
-                match nob {
-                    Node::Text(text) => {
-                        let mut str = String::new();
-                        str.push_str(&format!("(config.{})(\"{}\")", text_name, Self::escape(text.text.span.value())));
-                        str
-                    },
-                    Node::Tag(tag) => Self::generate_tag(tag, in_attr)
-                }
-            }
-
-            pub fn generate_block(nob: &Block, in_attr: bool) -> String {
-                Self::generate_expr(&nob.expr, in_attr)
+            pub fn generate_block(nob: &Block) -> String {
+                Self::generate_expr(&nob.expr)
             }
 
 
-            pub fn generate_node_or_block(nob: &NodeOrBlock, in_attr: bool) -> String {
+            pub fn generate_node_or_block(nob: &NodeOrBlock) -> String {
                 match nob {
-                    NodeOrBlock::Node(node) => Self::generate_node(node, in_attr),
-                    NodeOrBlock::Block(block) => Self::generate_block(block, in_attr)
+                    NodeOrBlock::Node(node) => Self::generate_node(node),
+                    NodeOrBlock::Block(block) => Self::generate_block(block)
                 }
             }
 
@@ -547,16 +564,16 @@ pub mod rs {
 
                 match typ {
                     Type::Abstract(abs) => match abs {
-                        AbstractType::Any => generics.next(Some("ToString")),
+                        AbstractType::Any => generics.next(Some("Render")),
                         AbstractType::Number => "f32".into(),
                         AbstractType::IntLike => "usize".into(),
-                        AbstractType::AddAndEq => generics.next(Some("std::ops::Add + std::ops::Eq"))
+                        AbstractType::AddAndEq => generics.next(Some("std::ops::Add + std::ops::Eq + Render"))
                     }
                     Type::Primitive(prim) => match prim {
                         PrimitiveType::Function(arg_types) => {
                             let args: Vec<String> = arg_types.iter().map(|typ| Self::generate_type(generics, typ)).collect();
                             let arg_list = args[0..args.len() - 1].join(",");
-                            generics.next(Some(&format!("fn({}) -> {}", arg_list, args[args.len() - 1])))
+                            generics.next(Some(&format!("Fn({}) -> {}", arg_list, args[args.len() - 1])))
                         }
                         PrimitiveType::Unit => "()".into(),
                         PrimitiveType::Array(inner) => {
@@ -600,10 +617,10 @@ pub mod rs {
                     &generics_def_str,
                     props_type_str
                 );
-                str.push_str(&format!("use rex::{{Config, BoxedObject, BoxedObjectFn, BoxedNodeFn}}; use structx::*; {} pub fn render<'props, {}, DOM_NODE, NODE>(props: &'props Props<{}>, config: &rex::Config<DOM_NODE, NODE>) -> DOM_NODE {{", props_type, &generics_def_str, &generics_str));
+                str.push_str(&format!("use rex::{{Config, ChildFn, AttributeFn, ChildValue, AttributeValue}}; use structx::*; {} pub fn render<'props, {}, NODE: Node>(props: &'props Props<{}>, config: &'props Config<NODE>) -> impl Flatten<Node=NODE> {{", props_type, &generics_def_str, &generics_str));
                 match &view.root {
                     None => {},
-                    Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob, false))
+                    Some(nob) =>  str.push_str(&Self::generate_node_or_block(&nob))
                 }
                 str.push_str("}");
                 str

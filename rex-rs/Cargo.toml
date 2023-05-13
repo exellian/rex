@@ -8,5 +8,8 @@ edition = "2021"
 [dependencies]
 structx = "0.1"
 
+[build-dependencies]
+inwelling = "0.5.0"
+
 [package.metadata.inwelling]
 structx = true

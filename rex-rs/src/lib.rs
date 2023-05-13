@@ -1,22 +1,68 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::iter::Map;
+use std::collections::{HashMap};
 
-pub trait Node {}
-pub trait Object {}
+pub trait Node: Render {}
+pub trait Flatten {
+    type Node;
+    fn flatten(self) -> Vec<Self::Node>;
+}
+pub trait Render {
+    fn render(&self) -> String;
+}
 
-impl<'a, T> Object for &'a T {}
-impl<T> Object for Vec<T> {}
+impl<NODE> Render for dyn Flatten<Node=NODE> {
 
-pub type BoxedObject<'props> = Box<dyn Object + 'props>;
-pub type BoxedObjectFn<'props> = Box<dyn Fn() -> BoxedObject<'props> + 'props>;
-pub type BoxedNodeFn<'props, NODE> = Box<dyn Fn() -> Vec<NODE> + 'props>;
+    fn render(&self) -> String {
+        todo!()
+    }
+}
 
-pub struct Config<DOM_NODE, NODE> {
-    dom_el: for<'props> fn(&str, attributes: HashMap<String, BoxedObjectFn<'props>>, children: Vec<BoxedNodeFn<'props, DOM_NODE>>) -> DOM_NODE,
-    dom_text: Box<fn(&str) -> DOM_NODE>,
-    el: Box<for<'props> fn(&str, attributes: HashMap<String, BoxedObjectFn<'props>>, children: Vec<BoxedNodeFn<'props, NODE>>) -> NODE>,
-    text: Box<fn(&str) -> NODE>,
+impl<'a, T> Render for &'a T where T: Render {
+    fn render(&self) -> String {
+        Render::render(*self)
+    }
+}
+
+impl<T> Render for Vec<T> where T: Render {
+
+    fn render(&self) -> String {
+        todo!()
+    }
+}
+
+impl<T> Flatten for T where T: Node {
+    type Node = T;
+
+    #[inline]
+    fn flatten(self) -> Vec<Self::Node> {
+        vec![self]
+    }
+}
+
+impl<T, NODE> Flatten for Vec<T> where T: Flatten<Node=NODE> {
+    type Node = NODE;
+    fn flatten(self) -> Vec<NODE> {
+        self.into_iter()
+            .flat_map(|x| x.flatten())
+            .collect::<Vec<_>>()
+    }
+}
+
+
+pub type AttributeValue<'props> = Box<dyn Render + 'props>;
+
+pub type AttributeFn<'props> = Box<dyn FnOnce() -> AttributeValue<'props> + 'props>;
+
+pub type ChildValue<'props, NODE> = Box<dyn Flatten<Node=NODE> + 'props>;
+/**
+ * Always returns a vector of nodes because we need to support higher order for loops
+ * which would result in Array<Array<NODE>> types which need to be flattened to Array<Node>
+ * But can't be transformed into just NODE
+ */
+pub type ChildFn<'props, NODE> = Box<dyn FnOnce() -> ChildValue<'props, NODE> + 'props>;
+
+pub struct Config<NODE> {
+    el: for<'props> fn(&str, attributes: HashMap<String, AttributeFn<'props>>, children: Vec<ChildFn<'props, NODE>>) -> NODE,
+    text: fn(&str) -> NODE,
 }
 
 pub fn add(left: usize, right: usize) -> usize {
@@ -29,34 +75,22 @@ mod tests {
     use structx::*;
     use super::*;
 
-    use structx::*;
-
-    use structx::*;
-
-    use structx::*;
-
-    use structx::*;
-
-    pub type Props<T: ToString + Clone + Copy> = Structx! { products: Vec<Structx!{ name: T }> };
-
-    pub fn render<'props, T: ToString + Copy + Clone, DOM_NODE, NODE: Object>(props: &'props Props<T>, config: &Config<DOM_NODE, NODE>) -> DOM_NODE {
-        (config.dom_el)("test", HashMap::from([("name".to_string(), Box::new(|| { Box::new((config.el)("div", HashMap::from([]), vec![])) as BoxedObject<'props> }) as BoxedObjectFn<'props>)]), vec![Box::new(|| { Box::new(([props.products]).iter().flat_map(|[product]| { ([props.products]).iter().flat_map(|[product1]| { [([product1]).name] }).collect::<Vec<_>>() }).collect::<Vec<_>>()) as BoxedObject<'props> }) as BoxedObjectFn<'props>]) }
+    pub type Props<T: Render,T1: Render> = Structx!{
+        items: Vec<T>,
+        products: Vec<Structx!{ name: T1 }>
+    };
+    pub fn render<'props, T: Render,T1: Render, NODE: Node>(props: &'props Props<T,T1>, config: &'props Config<NODE>) -> impl Flatten<Node=NODE> {
+        (config.el)(
+            "test",
+            HashMap::from([("name".to_string(), Box::new(|| { Box::new("Hallo Welt") as AttributeValue<'props> }) as AttributeFn<'props>)]),
+            vec![Box::new(|| { Box::new((config.el)("div", HashMap::from([("class".to_string(), Box::new(|| { Box::new("well-done") as AttributeValue<'props> }) as AttributeFn<'props>)]), vec![Box::new(|| { Box::new((config.el)("a", HashMap::from([("href".to_string(), Box::new(|| { Box::new("https://localhost:8000/post") as AttributeValue<'props> }) as AttributeFn<'props>)]), vec![])) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>])) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Box::new(|| { Box::new((config.text)(&((&props.products).into_iter().map(|product| {(&props.products).into_iter().map(|product1| {&(&product1).name}).collect::<Vec<_>>()}).collect::<Vec<_>>()).render())) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           Box::new(|| { Box::new((config.el)("ul", HashMap::from([]), vec![Box::new(|| { Box::new((&props.items).into_iter().map(|x| {(config.el)("li", HashMap::from([]), vec![Box::new(|| { Box::new((config.text)(&(&(&x).age).render())) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>])}).collect::<Vec<_>>()) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>])) as ChildValue<'props, NODE> }) as ChildFn<'props, NODE>])
+    }
 
     #[test]
     fn it_works() {
         let result = add(2, 2);
-        let x = structx! { products: vec![structx! { name: 0 }] };
-
-        fn test<T>(x: T) -> Structx! { name: T } {
-            structx! {
-                name: x
-            }
-        }
-
-        pub fn rr<T: ToString, DOM_NODE, NODE>(props: &Props<T>, config: &Config<DOM_NODE, NODE>) -> DOM_NODE {
-            todo!()
-        }
-
         assert_eq!(result, 4);
     }
 }
