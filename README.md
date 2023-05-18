@@ -15,7 +15,7 @@ Momentaner Fokus ist die Fertigstellung der Templatingsprache:
     }
 </div>
 ```
-wird zu folgendem rust-code transpiled:
+wird zu folgendem Rust-Code transpiled:
 ```rust
 use rex::{AttributeFn, AttributeValue, ChildFn, ChildValue, Config};
 use structx::*;
