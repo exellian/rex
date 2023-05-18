@@ -39,6 +39,11 @@ impl Render for String {
         self.clone()
     }
 }
+impl Render for usize {
+    fn render(&self) -> String {
+        todo!()
+    }
+}
 
 impl<T> Flatten for T
 where
@@ -94,12 +99,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use structx::*;
-
-    pub type Props<T: Render, T1: Render> = Structx! {
-
-        items: Vec<Structx!{ age: T }>,
-        products: Vec<Structx!{ name: T1 }>
-    };
+    pub type Props<T: Render, T1: Render> =
+        Structx! { items: Vec<Structx!{ age: T }>,products: Vec<Structx!{ name: T1 }> };
     pub fn render<'props, T: Render, T1: Render, NODE: Node>(
         props: &'props Props<T, T1>,
         config: &'props Config<NODE>,
@@ -136,13 +137,16 @@ mod tests {
                     )) as ChildValue<'props, NODE>
                 }) as ChildFn<'props, NODE>,
                 Box::new(|| {
+                    Box::new((config.text)(&(3243 + 32324).render())) as ChildValue<'props, NODE>
+                }) as ChildFn<'props, NODE>,
+                Box::new(|| {
                     Box::new((config.text)(
-                        &((&props.products)
-                            .into_iter()
+                        &((props.products)
+                            .iter()
                             .map(|product| {
-                                (&props.products)
-                                    .into_iter()
-                                    .map(|product1| &(&product1).name)
+                                (props.products)
+                                    .iter()
+                                    .map(|product1| &(product1).name)
                                     .collect::<Vec<_>>()
                             })
                             .collect::<Vec<_>>())
@@ -155,14 +159,14 @@ mod tests {
                         HashMap::from([]),
                         vec![Box::new(|| {
                             Box::new(
-                                (&props.items)
-                                    .into_iter()
+                                (props.items)
+                                    .iter()
                                     .map(|x| {
                                         (config.el)(
                                             "li",
                                             HashMap::from([]),
                                             vec![Box::new(|| {
-                                                Box::new((config.text)(&(&(&x).age).render()))
+                                                Box::new((config.text)(&((x).age).render()))
                                                     as ChildValue<'props, NODE>
                                             })
                                                 as ChildFn<'props, NODE>],
