@@ -1,8 +1,8 @@
-use std::fs::File;
-use std::io::Write;
-use rex_compiler_rs::{parser, rex};
 use rex_compiler_rs::codegen::rs::RsCodegen;
 use rex_compiler_rs::rex::View;
+use rex_compiler_rs::{parser, rex};
+use std::fs::File;
+use std::io::Write;
 
 fn main() {
     let code = include_str!("../test-src/test1.rex");
@@ -10,7 +10,7 @@ fn main() {
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();
-    println!("{:#?}", view);
+    //println!("{:#?}", view);
 
     let rs = RsCodegen::new();
     let res = rs.generate(&view);

@@ -1,6 +1,9 @@
 target
 rex-compiler-ts/target
 rex-compiler-rs/target
+rex-compiler-rs/target/.rustc_info.json
+rex-rs/target
+rex-rs/target/.rustc_info.json
 rex-loader/node_modules
 rex-test-ts/node_modules
 rex-ts/node_modules

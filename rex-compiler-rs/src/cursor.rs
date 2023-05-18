@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-pub trait Cursor : Clone {
+pub trait Cursor: Clone {
     type Item;
 
     fn next(&mut self) -> Option<Self::Item>;
@@ -12,18 +12,17 @@ pub trait Cursor : Clone {
 #[derive(Clone)]
 pub struct CharCursor<'a> {
     iter: Peekable<Chars<'a>>,
-    position: usize
+    position: usize,
 }
 
 mod implementation {
     use crate::cursor::{CharCursor, Cursor};
 
     impl<'a> CharCursor<'a> {
-
         pub fn new(code: &'a str) -> Self {
             CharCursor {
                 iter: code.chars().peekable(),
-                position: 0
+                position: 0,
             }
         }
     }
@@ -46,4 +45,3 @@ mod implementation {
         }
     }
 }
-

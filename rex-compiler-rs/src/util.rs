@@ -1,28 +1,31 @@
-use std::collections::{BTreeMap, hash_map, HashMap, HashSet};
+use std::collections::{hash_map, BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::ops::Range;
 
 #[derive(Clone, Eq, Hash)]
 pub struct Span<'a> {
     pub code: &'a str,
-    pub range: Range<usize>
+    pub range: Range<usize>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SpanOwned {
     value: String,
-    range: Range<usize>
+    range: Range<usize>,
 }
 
 pub struct HashMultimap<K, V> {
-    inner: HashMap<K, HashSet<V>>
+    inner: HashMap<K, HashSet<V>>,
 }
-impl<K, V> HashMultimap<K, V> where K: Eq + Hash, V:  Eq + Hash {
-
+impl<K, V> HashMultimap<K, V>
+where
+    K: Eq + Hash,
+    V: Eq + Hash,
+{
     #[inline]
     pub fn new() -> Self {
         HashMultimap {
-            inner: HashMap::new()
+            inner: HashMap::new(),
         }
     }
 
@@ -57,7 +60,10 @@ impl<K, V> HashMultimap<K, V> where K: Eq + Hash, V:  Eq + Hash {
         self.inner.get(key)
     }
 
-    pub fn extend<I>(&mut self, other: impl IntoIterator<Item=(K, I)>) where I: IntoIterator<Item=V> {
+    pub fn extend<I>(&mut self, other: impl IntoIterator<Item = (K, I)>)
+    where
+        I: IntoIterator<Item = V>,
+    {
         for (key, values) in other.into_iter() {
             let mut tmp = None;
             let set = match self.inner.get_mut(&key) {
@@ -97,18 +103,27 @@ impl<K, V> IntoIterator for HashMultimap<K, V> {
     }
 }
 
-impl<K, V> From<BTreeMap<K, V>> for HashMultimap<K, V> where K: Hash + Eq, V: Hash + Eq {
+impl<K, V> From<BTreeMap<K, V>> for HashMultimap<K, V>
+where
+    K: Hash + Eq,
+    V: Hash + Eq,
+{
     fn from(value: BTreeMap<K, V>) -> Self {
         HashMultimap {
-            inner: value.into_iter()
+            inner: value
+                .into_iter()
                 .map(|(k, v)| (k, HashSet::from([v])))
                 .collect(),
         }
     }
 }
 
-impl<const N: usize, K, V, I> From<[(K, I);N]> for HashMultimap<K, V> where K: Hash + Eq, V: Hash + Eq, I: IntoIterator<Item=V> {
-
+impl<const N: usize, K, V, I> From<[(K, I); N]> for HashMultimap<K, V>
+where
+    K: Hash + Eq,
+    V: Hash + Eq,
+    I: IntoIterator<Item = V>,
+{
     fn from(value: [(K, I); N]) -> Self {
         let mut res = HashMultimap::new();
         res.extend(value);
@@ -117,17 +132,13 @@ impl<const N: usize, K, V, I> From<[(K, I);N]> for HashMultimap<K, V> where K: H
 }
 
 mod implementation {
+    use crate::util::{Span, SpanOwned};
     use std::fmt::{Debug, Formatter};
     use std::ops::Range;
-    use crate::util::{Span, SpanOwned};
 
     impl<'a> Span<'a> {
-
         pub fn new(code: &'a str, range: Range<usize>) -> Self {
-            Span {
-                code,
-                range
-            }
+            Span { code, range }
         }
 
         pub fn value(&self) -> &str {
@@ -137,7 +148,7 @@ mod implementation {
         pub fn owned(&self) -> SpanOwned {
             SpanOwned {
                 value: self.value().to_string(),
-                range: self.range.clone()
+                range: self.range.clone(),
             }
         }
     }

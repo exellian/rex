@@ -1,33 +1,32 @@
+use crate::codegen::js::JsCodegen;
+use crate::rex::parse::View;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
-use crate::codegen::js::JsCodegen;
-use crate::rex::parse::View;
 
-mod util;
+pub mod codegen;
 mod cursor;
 pub mod parser;
 pub mod rex;
-pub mod codegen;
+mod util;
 
-pub use rex::lex;
 use crate::codegen::rs::RsCodegen;
+pub use rex::lex;
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
     let mut lexer = lex::Lexer::new(code);
-
-/*
-    let mut tokens = vec![];
-    loop {
-        let token = lexer.next();
-        match token {
-            Some(tok) => tokens.push(tok.unwrap()),
-            None => break
+    /*
+        let mut tokens = vec![];
+        loop {
+            let token = lexer.next();
+            match token {
+                Some(tok) => tokens.push(tok.unwrap()),
+                None => break
+            }
         }
-    }
-    println!("{:?}", tokens);
-*/
+        println!("{:?}", tokens);
+    */
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();

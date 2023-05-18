@@ -5,18 +5,18 @@ pub mod lex {
     #[derive(Clone, Debug)]
     pub enum Error {
         UnexpectedEof,
-        UnexpectedToken
+        UnexpectedToken,
     }
 
     #[derive(Clone, Debug)]
     pub struct Punct<'a> {
         pub span: Span<'a>,
-        pub ch: char
+        pub ch: char,
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct Text<'a> {
-        pub span: Span<'a>
+        pub span: Span<'a>,
     }
 
     #[derive(Clone, Debug)]
@@ -27,30 +27,30 @@ pub mod lex {
     #[derive(Clone, Debug)]
     pub enum StringDelimiter {
         Single,
-        Double
+        Double,
     }
 
     #[derive(Clone, Debug)]
     pub struct StrLiteral<'a> {
         pub span: Span<'a>,
-        pub delimiter: StringDelimiter
+        pub delimiter: StringDelimiter,
     }
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     pub struct IntLiteral<'a> {
-        pub span: Span<'a>
+        pub span: Span<'a>,
     }
 
     #[derive(Clone, Debug)]
     pub struct FloatLiteral<'a> {
-        pub span: Span<'a>
+        pub span: Span<'a>,
     }
 
     #[derive(Clone, Debug)]
     pub enum Literal<'a> {
         Str(StrLiteral<'a>),
         Int(IntLiteral<'a>),
-        Float(FloatLiteral<'a>)
+        Float(FloatLiteral<'a>),
     }
 
     #[derive(Clone, Debug)]
@@ -58,7 +58,7 @@ pub mod lex {
         Punct(Punct<'a>),
         Text(Text<'a>),
         Literal(Literal<'a>),
-        Whitespace(Whitespace<'a>)
+        Whitespace(Whitespace<'a>),
     }
 
     #[derive(Clone)]
@@ -66,13 +66,16 @@ pub mod lex {
         code: &'a str,
         cursor: CharCursor<'a>,
         peeked: Option<Result<Token<'a>, Error>>,
-        position: usize
+        position: usize,
     }
 
     mod implementation {
         use crate::cursor::{CharCursor, Cursor};
         use crate::parser;
-        use crate::rex::lex::{Error, FloatLiteral, IntLiteral, Lexer, Literal, Punct, StringDelimiter, StrLiteral, Text, Token, Whitespace};
+        use crate::rex::lex::{
+            Error, FloatLiteral, IntLiteral, Lexer, Literal, Punct, StrLiteral, StringDelimiter,
+            Text, Token, Whitespace,
+        };
         use crate::util::Span;
 
         struct StrLiteralContext {
@@ -81,7 +84,7 @@ pub mod lex {
         }
 
         struct NumLiteralContext {
-            contains_point: bool
+            contains_point: bool,
         }
 
         enum LexerContext {
@@ -89,11 +92,10 @@ pub mod lex {
             Whitespace,
             NumLiteralOrDot,
             NumLiteral(NumLiteralContext),
-            Text
+            Text,
         }
 
         impl<'a> Token<'a> {
-
             pub fn span(&self) -> Span<'a> {
                 match self {
                     Token::Punct(punct) => punct.span.clone(),
@@ -101,9 +103,9 @@ pub mod lex {
                     Token::Literal(lit) => match lit {
                         Literal::Str(str) => str.span.clone(),
                         Literal::Int(i) => i.span.clone(),
-                        Literal::Float(f) => f.span.clone()
-                    }
-                    Token::Whitespace(ws) => ws.span.clone()
+                        Literal::Float(f) => f.span.clone(),
+                    },
+                    Token::Whitespace(ws) => ws.span.clone(),
                 }
             }
         }
@@ -112,7 +114,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Punct(punct) = next? {
                         return Ok((cursor, punct));
@@ -126,7 +130,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Text(text) = next? {
                         return Ok((cursor, text));
@@ -140,7 +146,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Whitespace(ws) = next? {
                         return Ok((cursor, ws));
@@ -154,7 +162,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Literal(Literal::Str(lit)) = next? {
                         return Ok((cursor, lit));
@@ -168,7 +178,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Literal(Literal::Int(lit)) = next? {
                         return Ok((cursor, lit));
@@ -182,7 +194,9 @@ pub mod lex {
             type Error = Error;
             type Token = Result<Token<'a>, Self::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut cursor: C) -> Result<(C, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut cursor: C,
+            ) -> Result<(C, Self), Self::Error> {
                 if let Some(next) = cursor.next() {
                     if let Token::Literal(Literal::Float(lit)) = next? {
                         return Ok((cursor, lit));
@@ -193,7 +207,6 @@ pub mod lex {
         }
 
         impl<'a> Lexer<'a> {
-            
             pub const SINGLE_QUOTE: char = '\'';
             pub const DOUBLE_QUOTE: char = '"';
             pub const DECIMAL_0: char = '0';
@@ -239,59 +252,58 @@ pub mod lex {
                     code,
                     cursor: CharCursor::new(code),
                     peeked: None,
-                    position: 0
+                    position: 0,
                 }
             }
 
             #[inline]
             fn is_text(ch: char) -> bool {
-                    !Self::is_whitespace(ch) &&
-                    !Self::is_punct(ch) &&
-                    !Self::is_quote(ch)
+                !Self::is_whitespace(ch.clone())
+                    && !Self::is_punct(ch.clone())
+                    && !Self::is_quote(ch)
             }
 
             #[inline]
             fn is_quote(ch: char) -> bool {
-                ch == Self::SINGLE_QUOTE ||
-                    ch == Self::DOUBLE_QUOTE
+                ch == Self::SINGLE_QUOTE || ch == Self::DOUBLE_QUOTE
             }
 
             #[inline]
             fn is_punct(ch: char) -> bool {
-                ch == Self::COMMA ||
-                    ch == Self::DOT ||
-                    ch == Self::PLUS ||
-                    ch == Self::MINUS ||
-                    ch == Self::MUL ||
-                    ch == Self::DIV ||
-                    ch == Self::MOD ||
-                    ch == Self::EQ ||
-                    ch == Self::AND ||
-                    ch == Self::OR ||
-                    ch == Self::XOR ||
-                    ch == Self::LT ||
-                    ch == Self::GT ||
-                    ch == Self::NEG ||
-                    ch == Self::PAREN_LEFT ||
-                    ch == Self::PAREN_RIGHT ||
-                    ch == Self::BRACKET_LEFT ||
-                    ch == Self::BRACKET_RIGHT ||
-                    ch == Self::BRACE_LEFT ||
-                    ch == Self::BRACE_RIGHT
+                ch == Self::COMMA
+                    || ch == Self::DOT
+                    || ch == Self::PLUS
+                    || ch == Self::MINUS
+                    || ch == Self::MUL
+                    || ch == Self::DIV
+                    || ch == Self::MOD
+                    || ch == Self::EQ
+                    || ch == Self::AND
+                    || ch == Self::OR
+                    || ch == Self::XOR
+                    || ch == Self::LT
+                    || ch == Self::GT
+                    || ch == Self::NEG
+                    || ch == Self::PAREN_LEFT
+                    || ch == Self::PAREN_RIGHT
+                    || ch == Self::BRACKET_LEFT
+                    || ch == Self::BRACKET_RIGHT
+                    || ch == Self::BRACE_LEFT
+                    || ch == Self::BRACE_RIGHT
             }
 
             #[inline]
             fn is_decimal(ch: char) -> bool {
-                ch == Self::DECIMAL_0 ||
-                    ch == Self::DECIMAL_1 ||
-                    ch == Self::DECIMAL_2 ||
-                    ch == Self::DECIMAL_3 ||
-                    ch == Self::DECIMAL_4 ||
-                    ch == Self::DECIMAL_5 ||
-                    ch == Self::DECIMAL_6 ||
-                    ch == Self::DECIMAL_7 ||
-                    ch == Self::DECIMAL_8 ||
-                    ch == Self::DECIMAL_9
+                ch == Self::DECIMAL_0
+                    || ch == Self::DECIMAL_1
+                    || ch == Self::DECIMAL_2
+                    || ch == Self::DECIMAL_3
+                    || ch == Self::DECIMAL_4
+                    || ch == Self::DECIMAL_5
+                    || ch == Self::DECIMAL_6
+                    || ch == Self::DECIMAL_7
+                    || ch == Self::DECIMAL_8
+                    || ch == Self::DECIMAL_9
             }
 
             #[inline]
@@ -359,7 +371,7 @@ pub mod lex {
                     Self::BRACKET_LEFT |
                     Self::BRACKET_RIGHT => return Some(Ok(Token::Punct(Punct {
                         span: Span::new(self.code, start_position..start_position + 1),
-                        ch: last
+                        ch: last.clone()
                     }))),
                     _ => LexerContext::Text
                 };
@@ -371,13 +383,17 @@ pub mod lex {
                             if let Some(ch) = next1 {
                                 if ch == '\\' {
                                     ctx.next_char_escaped = true;
-                                } else if !ctx.next_char_escaped && ch == ctx.delimiter.close_char() {
+                                } else if !ctx.next_char_escaped && ch == ctx.delimiter.close_char()
+                                {
                                     // move stream to peeked token
                                     token.push(self.cursor.next().unwrap());
                                     return Some(Ok(Token::Literal(Literal::Str(StrLiteral {
-                                        span: Span::new(self.code, start_position..start_position + token.len()),
+                                        span: Span::new(
+                                            self.code,
+                                            start_position..start_position + token.len(),
+                                        ),
                                         delimiter: ctx.delimiter.clone(),
-                                    }))))
+                                    }))));
                                 } else {
                                     ctx.next_char_escaped = false;
                                 }
@@ -387,8 +403,11 @@ pub mod lex {
                             let next1 = self.cursor.peek().cloned();
                             if next1.is_none() || !Self::is_whitespace(next1.unwrap()) {
                                 return Some(Ok(Token::Whitespace(Whitespace {
-                                    span: Span::new(self.code, start_position..start_position + token.len()),
-                                })))
+                                    span: Span::new(
+                                        self.code,
+                                        start_position..start_position + token.len(),
+                                    ),
+                                })));
                             }
                         }
                         LexerContext::NumLiteralOrDot => {
@@ -396,30 +415,38 @@ pub mod lex {
                             if next1.is_none() || !Self::is_decimal(next1.unwrap()) {
                                 return Some(Ok(Token::Punct(Punct {
                                     span: Span::new(self.code, start_position..start_position + 1),
-                                    ch: Self::DOT
-                                })))
+                                    ch: Self::DOT,
+                                })));
                             } else {
                                 // Make a context switch to a number
                                 context = LexerContext::NumLiteral(NumLiteralContext {
-                                    contains_point: true
+                                    contains_point: true,
                                 })
                             }
                         }
                         LexerContext::NumLiteral(ctx) => {
                             let next1 = self.cursor.peek().cloned();
-                            if next1.is_none() ||
-                                (ctx.contains_point && !Self::is_decimal(next1.unwrap())) ||
-                                (!ctx.contains_point && !(Self::is_decimal(next1.unwrap()) || next1.unwrap() == Self::DOT))
+                            if next1.is_none()
+                                || (ctx.contains_point && !Self::is_decimal(next1.unwrap()))
+                                || (!ctx.contains_point
+                                    && !(Self::is_decimal(next1.unwrap())
+                                        || next1.unwrap() == Self::DOT))
                             {
                                 return if ctx.contains_point {
                                     Some(Ok(Token::Literal(Literal::Float(FloatLiteral {
-                                        span: Span::new(self.code, start_position..start_position + token.len())
+                                        span: Span::new(
+                                            self.code,
+                                            start_position..start_position + token.len(),
+                                        ),
                                     }))))
                                 } else {
                                     Some(Ok(Token::Literal(Literal::Int(IntLiteral {
-                                        span: Span::new(self.code, start_position..start_position + token.len())
+                                        span: Span::new(
+                                            self.code,
+                                            start_position..start_position + token.len(),
+                                        ),
                                     }))))
-                                }
+                                };
                             } else {
                                 if let Some(c) = next1 {
                                     if c == Self::DOT {
@@ -432,14 +459,17 @@ pub mod lex {
                             let next1 = self.cursor.peek().cloned();
                             if next1.is_none() || !Self::is_text(next1.unwrap()) {
                                 return Some(Ok(Token::Text(Text {
-                                    span: Span::new(self.code, start_position..start_position + token.len())
-                                })))
+                                    span: Span::new(
+                                        self.code,
+                                        start_position..start_position + token.len(),
+                                    ),
+                                })));
                             }
                         }
                     }
                     last = match self.cursor.next() {
                         Some(ch) => ch,
-                        None => return Some(Err(Error::UnexpectedEof))
+                        None => return Some(Err(Error::UnexpectedEof)),
                     };
                     token.push(last);
                 }
@@ -476,7 +506,7 @@ pub mod lex {
             fn close_char(&self) -> char {
                 match self {
                     StringDelimiter::Single => Lexer::SINGLE_QUOTE,
-                    StringDelimiter::Double => Lexer::DOUBLE_QUOTE
+                    StringDelimiter::Double => Lexer::DOUBLE_QUOTE,
                 }
             }
         }
@@ -484,13 +514,13 @@ pub mod lex {
 }
 
 pub mod parse {
-    use std::marker::PhantomData;
     use crate::rex::lex;
     use crate::rex::lex::Text;
     use crate::rex::parse::primitive::Empty;
     use crate::rex::parse::scope::Scope;
     use crate::rex::parse::typ::Type;
     use crate::util::SpanOwned;
+    use std::marker::PhantomData;
 
     #[derive(Debug)]
     pub enum Error {
@@ -499,60 +529,60 @@ pub mod parse {
         UnexpectedEof,
         TypeError(Type, Type),
         UnsupportedOperation,
-        DuplicateVar(String)
+        DuplicateVar(String),
     }
 
     pub mod primitive {
-        use std::marker::PhantomData;
         use crate::rex::lex::{FloatLiteral, IntLiteral, Punct, StrLiteral, Text};
+        use std::marker::PhantomData;
 
         #[derive(Debug, Eq, Clone, Hash)]
         pub struct Ident<'a> {
-            pub text: Text<'a>
+            pub text: Text<'a>,
         }
         #[derive(Debug)]
         pub struct BraceLeft<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct BraceRight<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct BracketLeft<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct BracketRight<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct ParenLeft<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct ParenRight<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Add<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Sub<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Mul<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Div<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Mod<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Bang<'a> {
@@ -560,81 +590,81 @@ pub mod parse {
         }
         #[derive(Debug)]
         pub struct Lt<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Gt<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Le<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Ge<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct And<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct AndAnd<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Or<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct OrOr<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Xor<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Eq<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct EqEq<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Ne<'a> {
             punct0: Punct<'a>,
-            punct1: Punct<'a>
+            punct1: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Comma<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct Dot<'a> {
-            punct: Punct<'a>
+            punct: Punct<'a>,
         }
         #[derive(Debug)]
         pub struct If<'a> {
-            text: Text<'a>
+            text: Text<'a>,
         }
         #[derive(Debug)]
         pub struct Else<'a> {
-            text: Text<'a>
+            text: Text<'a>,
         }
         #[derive(Debug)]
         pub struct For<'a> {
-            text: Text<'a>
+            text: Text<'a>,
         }
         #[derive(Debug)]
         pub struct In<'a> {
-            text: Text<'a>
+            text: Text<'a>,
         }
         #[derive(Debug)]
         pub enum Lit<'a> {
@@ -645,37 +675,42 @@ pub mod parse {
         }
         #[derive(Debug)]
         pub struct LitStr<'a> {
-            pub lit: StrLiteral<'a>
+            pub lit: StrLiteral<'a>,
         }
         #[derive(Debug)]
         pub struct LitInt<'a> {
             pub lit: IntLiteral<'a>,
-            pub value: usize
+            pub value: usize,
         }
         #[derive(Debug)]
         pub struct LitFloat<'a> {
             pub lit: FloatLiteral<'a>,
-            pub value: f64
+            pub value: f64,
         }
         #[derive(Debug)]
         pub struct LitBool<'a> {
             pub text: Text<'a>,
-            pub value: bool
+            pub value: bool,
         }
 
         #[derive(Debug)]
         pub struct Empty<'a> {
-            _a: PhantomData<&'a ()>
+            _a: PhantomData<&'a ()>,
         }
 
         mod implementation {
-            use std::marker::PhantomData;
             use crate::cursor::Cursor;
             use crate::parser::{Parse, Parser};
             use crate::rex::lex;
             use crate::rex::lex::Lexer;
+            use crate::rex::parse::primitive::{
+                Add, And, AndAnd, Bang, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma,
+                Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool,
+                LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Or, OrOr, ParenLeft, ParenRight, Sub,
+                Xor,
+            };
             use crate::rex::parse::Error;
-            use crate::rex::parse::primitive::{Add, And, AndAnd, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma, Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Bang, Or, OrOr, ParenLeft, ParenRight, Sub, Xor};
+            use std::marker::PhantomData;
 
             impl<'a> PartialEq for Ident<'a> {
                 fn eq(&self, other: &Self) -> bool {
@@ -683,41 +718,44 @@ pub mod parse {
                 }
             }
 
-            fn check_chars<P>(str: &str, predicate: P) -> bool where P: Fn(char) -> bool {
+            fn check_chars<P>(str: &str, predicate: P) -> bool
+            where
+                P: Fn(char) -> bool,
+            {
                 str.chars().all(predicate)
             }
 
             fn is_ident_char(c: char) -> bool {
                 let val = c as u32;
-                (val >= '0' as u32 && val <= '9' as u32) ||
-                    (val >= 'a' as u32 && val <= 'z' as u32) ||
-                    (val >= 'A' as u32 && val <= 'Z' as u32) ||
-                    (val == Lexer::UNDERSCORE as u32)
+                (val >= '0' as u32 && val <= '9' as u32)
+                    || (val >= 'a' as u32 && val <= 'z' as u32)
+                    || (val >= 'A' as u32 && val <= 'Z' as u32)
+                    || (val == Lexer::UNDERSCORE as u32)
             }
 
             fn is_keyword(value: &str) -> bool {
-                value == "for" ||
-                    value == "if" ||
-                    value == "else" ||
-                    value == "in" ||
-                    value == "true" ||
-                    value == "false"
+                value == "for"
+                    || value == "if"
+                    || value == "else"
+                    || value == "in"
+                    || value == "true"
+                    || value == "false"
             }
 
             impl<'a> Parse for Ident<'a> {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     let value = text.span.value();
                     return if !is_keyword(value) && check_chars(value, is_ident_char) {
-                        Ok((parser, Ident {
-                            text
-                        }))
+                        Ok((parser, Ident { text }))
                     } else {
                         Err(Error::UnexpectedToken(text.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -725,15 +763,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACKET_LEFT {
-                        Ok((parser, BracketLeft {
-                            punct
-                        }))
+                        Ok((parser, BracketLeft { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -741,15 +779,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACKET_RIGHT {
-                        Ok((parser, BracketRight {
-                            punct
-                        }))
+                        Ok((parser, BracketRight { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -757,15 +795,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACE_LEFT {
-                        Ok((parser, BraceLeft {
-                            punct
-                        }))
+                        Ok((parser, BraceLeft { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -773,15 +811,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::BRACE_RIGHT {
-                        Ok((parser, BraceRight {
-                            punct
-                        }))
+                        Ok((parser, BraceRight { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -789,15 +827,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PAREN_LEFT {
-                        Ok((parser, ParenLeft {
-                            punct
-                        }))
+                        Ok((parser, ParenLeft { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -805,15 +843,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PAREN_RIGHT {
-                        Ok((parser, ParenRight {
-                            punct
-                        }))
+                        Ok((parser, ParenRight { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -821,15 +859,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::PLUS {
-                        Ok((parser, Add {
-                            punct
-                        }))
+                        Ok((parser, Add { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -837,15 +875,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MINUS {
-                        Ok((parser, Sub {
-                            punct
-                        }))
+                        Ok((parser, Sub { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -853,15 +891,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MUL {
-                        Ok((parser, Mul {
-                            punct
-                        }))
+                        Ok((parser, Mul { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -869,15 +907,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::DIV {
-                        Ok((parser, Div {
-                            punct
-                        }))
+                        Ok((parser, Div { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -885,15 +923,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::MOD {
-                        Ok((parser, Mod {
-                            punct
-                        }))
+                        Ok((parser, Mod { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -901,15 +939,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::NEG {
-                        Ok((parser, Bang {
-                            punct
-                        }))
+                        Ok((parser, Bang { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -917,15 +955,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::LT {
-                        Ok((parser, Lt {
-                            punct
-                        }))
+                        Ok((parser, Lt { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -933,15 +971,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::GT {
-                        Ok((parser, Gt {
-                            punct
-                        }))
+                        Ok((parser, Gt { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -949,17 +987,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::LT && punct1.ch == Lexer::EQ {
-                        Ok((parser, Le {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, Le { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -967,17 +1004,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::GT && punct1.ch == Lexer::EQ {
-                        Ok((parser, Ge {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, Ge { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -985,15 +1021,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::AND {
-                        Ok((parser, And {
-                            punct
-                        }))
+                        Ok((parser, And { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1001,17 +1037,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::AND && punct1.ch == Lexer::AND {
-                        Ok((parser, AndAnd {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, AndAnd { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1019,15 +1054,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::OR {
-                        Ok((parser, Or {
-                            punct
-                        }))
+                        Ok((parser, Or { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1035,17 +1070,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::OR && punct1.ch == Lexer::OR {
-                        Ok((parser, OrOr {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, OrOr { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1053,15 +1087,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::XOR {
-                        Ok((parser, Xor {
-                            punct
-                        }))
+                        Ok((parser, Xor { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1069,15 +1103,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::EQ {
-                        Ok((parser, Eq {
-                            punct
-                        }))
+                        Ok((parser, Eq { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1085,17 +1119,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::EQ && punct1.ch == Lexer::EQ {
-                        Ok((parser, EqEq {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, EqEq { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1103,17 +1136,16 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct0) = parser.parse_token::<lex::Punct>()?;
                     let (parser, punct1) = parser.parse_token::<lex::Punct>()?;
                     return if punct0.ch == Lexer::NEG && punct1.ch == Lexer::EQ {
-                        Ok((parser, Ne {
-                            punct0,
-                            punct1
-                        }))
+                        Ok((parser, Ne { punct0, punct1 }))
                     } else {
                         Err(Error::UnexpectedToken(punct0.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1121,15 +1153,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::COMMA {
-                        Ok((parser, Comma {
-                            punct
-                        }))
+                        Ok((parser, Comma { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1137,15 +1169,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, punct) = parser.parse_token::<lex::Punct>()?;
                     return if punct.ch == Lexer::DOT {
-                        Ok((parser, Dot {
-                            punct
-                        }))
+                        Ok((parser, Dot { punct }))
                     } else {
                         Err(Error::UnexpectedToken(punct.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1153,15 +1185,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "if" {
-                        Ok((parser, If {
-                            text
-                        }))
+                        Ok((parser, If { text }))
                     } else {
                         Err(Error::UnexpectedToken(text.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1169,15 +1201,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "else" {
-                        Ok((parser, Else {
-                            text
-                        }))
+                        Ok((parser, Else { text }))
                     } else {
                         Err(Error::UnexpectedToken(text.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1185,15 +1217,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "for" {
-                        Ok((parser, For {
-                            text
-                        }))
+                        Ok((parser, For { text }))
                     } else {
                         Err(Error::UnexpectedToken(text.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1201,15 +1233,15 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     return if text.span.value() == "in" {
-                        Ok((parser, In {
-                            text
-                        }))
+                        Ok((parser, In { text }))
                     } else {
                         Err(Error::UnexpectedToken(text.span.owned()))
-                    }
+                    };
                 }
             }
 
@@ -1217,7 +1249,9 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, lit_str) = parser.opt_parse::<LitStr>();
                     match lit_str {
                         Some(lit_str) => Ok((parser, Lit::Str(lit_str))),
@@ -1245,11 +1279,11 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, lit) = parser.parse_token::<lex::StrLiteral>()?;
-                    Ok((parser, LitStr {
-                        lit
-                    }))
+                    Ok((parser, LitStr { lit }))
                 }
             }
 
@@ -1257,13 +1291,12 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, lit) = parser.parse_token::<lex::IntLiteral>()?;
                     let value = lit.span.value().parse::<usize>().unwrap();
-                    Ok((parser, LitInt {
-                        lit,
-                        value
-                    }))
+                    Ok((parser, LitInt { lit, value }))
                 }
             }
 
@@ -1271,13 +1304,12 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, lit) = parser.parse_token::<lex::FloatLiteral>()?;
                     let value = lit.span.value().parse::<f64>().unwrap();
-                    Ok((parser, LitFloat {
-                        lit,
-                        value
-                    }))
+                    Ok((parser, LitFloat { lit, value }))
                 }
             }
 
@@ -1285,52 +1317,49 @@ pub mod parse {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
                     let (parser, text) = parser.parse_token::<lex::Text>()?;
                     let value = match text.span.value() {
                         "true" => true,
                         "false" => false,
-                        _ => return Err(Error::UnexpectedToken(text.span.owned()))
+                        _ => return Err(Error::UnexpectedToken(text.span.owned())),
                     };
-                    Ok((parser, LitBool {
-                        text,
-                        value
-                    }))
+                    Ok((parser, LitBool { text, value }))
                 }
             }
-
 
             impl<'a> Parse for Empty<'a> {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
 
-                fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                    Ok((parser, Empty {
-                        _a: PhantomData
-                    }))
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
+                    Ok((parser, Empty { _a: PhantomData }))
                 }
             }
-
         }
     }
 
     #[derive(Debug)]
     pub struct View<'a> {
-        pub root: Option<NodeOrBlock<'a>>
+        pub root: Option<NodeOrBlock<'a>>,
     }
     #[derive(Debug)]
     pub enum NodeOrBlock<'a> {
         Node(Node<'a>),
-        Block(Block<'a>)
+        Block(Block<'a>),
     }
     #[derive(Debug)]
     pub enum Node<'a> {
         Text(TextNode<'a>),
-        Tag(TagNode<'a>)
+        Tag(TagNode<'a>),
     }
     #[derive(Debug)]
     pub struct TextNode<'a> {
-        pub text: Text<'a>
+        pub text: Text<'a>,
     }
     #[derive(Debug)]
     pub struct TagNode<'a> {
@@ -1339,7 +1368,7 @@ pub mod parse {
         pub attributes: Vec<Attribute<'a>>,
         pub div: Option<primitive::Div<'a>>,
         pub gt: primitive::Gt<'a>,
-        pub block: Option<TagBlock<'a>>
+        pub block: Option<TagBlock<'a>>,
     }
     #[derive(Debug)]
     pub struct TagBlock<'a> {
@@ -1353,18 +1382,18 @@ pub mod parse {
     pub struct Attribute<'a> {
         pub name: primitive::Ident<'a>,
         pub eq: primitive::Eq<'a>,
-        pub value: AttributeValue<'a>
+        pub value: AttributeValue<'a>,
     }
     #[derive(Debug)]
     pub enum AttributeValue<'a> {
         StrLit(primitive::LitStr<'a>),
-        Block(Block<'a>)
+        Block(Block<'a>),
     }
     #[derive(Debug)]
     pub struct Block<'a> {
         pub left: primitive::BraceLeft<'a>,
         pub expr: Box<Expr<'a>>,
-        pub right: primitive::BraceRight<'a>
+        pub right: primitive::BraceRight<'a>,
     }
     // Order of expr members is important
     // it is also the order in which expressions are tried to be parsed
@@ -1381,24 +1410,23 @@ pub mod parse {
         BinaryAp(BinaryAp<'a>),
         SelectorAp(SelectorAp<'a>),
         Ap(Ap<'a>),
-
     }
     #[derive(Debug)]
     pub struct Group<'a, E> {
         pub left: primitive::ParenLeft<'a>,
         pub expr: Box<E>,
-        pub right: primitive::ParenRight<'a>
+        pub right: primitive::ParenRight<'a>,
     }
     #[derive(Debug)]
     pub struct BinaryAp<'a> {
         pub typ: Type,
         pub left: Box<Expr<'a>>,
-        pub right: BinaryApRight<'a>
+        pub right: BinaryApRight<'a>,
     }
     #[derive(Debug)]
     pub struct BinaryApRight<'a> {
         pub op: BinaryOp<'a>,
-        pub right: Box<Expr<'a>>
+        pub right: Box<Expr<'a>>,
     }
     #[derive(Debug)]
     pub enum BinaryOp<'a> {
@@ -1417,18 +1445,18 @@ pub mod parse {
         Le(primitive::Le<'a>),
         Ge(primitive::Ge<'a>),
         Lt(primitive::Lt<'a>),
-        Gt(primitive::Gt<'a>)
+        Gt(primitive::Gt<'a>),
     }
     #[derive(Debug)]
     pub struct UnaryAp<'a> {
         pub typ: Type,
         pub op: UnaryOp<'a>,
-        pub right: Box<Expr<'a>>
+        pub right: Box<Expr<'a>>,
     }
     #[derive(Debug)]
     pub enum UnaryOp<'a> {
         Neg(primitive::Sub<'a>),
-        Not(primitive::Bang<'a>)
+        Not(primitive::Bang<'a>),
     }
     #[derive(Debug)]
     pub struct If<'a> {
@@ -1436,8 +1464,13 @@ pub mod parse {
         pub if0: primitive::If<'a>,
         pub condition: Box<Expr<'a>>,
         pub then_branch: Block<'a>,
-        pub elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
-        pub else_branch: (primitive::Else<'a>, Block<'a>)
+        pub elseif_branches: Vec<(
+            primitive::Else<'a>,
+            primitive::If<'a>,
+            Box<Expr<'a>>,
+            Block<'a>,
+        )>,
+        pub else_branch: (primitive::Else<'a>, Block<'a>),
     }
     #[derive(Debug)]
     pub struct For<'a> {
@@ -1446,87 +1479,91 @@ pub mod parse {
         pub binding: Var<'a>,
         pub in0: primitive::In<'a>,
         pub expr: Box<Expr<'a>>,
-        pub block: Block<'a>
+        pub block: Block<'a>,
     }
     #[derive(Clone, Debug)]
     pub struct Var<'a> {
         pub typ: Type,
         pub scope: Scope,
-        pub name: primitive::Ident<'a>
+        pub name: primitive::Ident<'a>,
     }
     #[derive(Debug)]
     pub struct Ap<'a> {
         pub typ: Type,
         pub expr: Box<Expr<'a>>,
-        pub right: ApRight<'a>
+        pub right: ApRight<'a>,
     }
     #[derive(Debug)]
     pub struct ApRight<'a> {
-        pub group: Group<'a, Punctuated<'a, Expr<'a>, primitive::Comma<'a>>>
+        pub group: Group<'a, Punctuated<'a, Expr<'a>, primitive::Comma<'a>>>,
     }
     #[derive(Debug)]
     pub struct Punctuated<'a, P, S> {
         pub expr: Box<P>,
         pub other: Option<(S, Box<Punctuated<'a, P, S>>)>,
-        pub _a: PhantomData<&'a ()>
+        pub _a: PhantomData<&'a ()>,
     }
     #[derive(Debug)]
     pub struct PunctuatedIter<'b, 'a, P, S> {
-        inner: Option<&'b Punctuated<'a, P, S>>
+        inner: Option<&'b Punctuated<'a, P, S>>,
     }
     #[derive(Debug)]
     pub struct PunctuatedIterMut<'b, 'a, P, S> {
-        inner: Option<&'b mut Punctuated<'a, P, S>>
+        inner: Option<&'b mut Punctuated<'a, P, S>>,
     }
     #[derive(Debug)]
     pub struct SelectorAp<'a> {
         pub typ: Type,
         pub expr: Box<Expr<'a>>,
-        pub right: SelectorApRight<'a>
+        pub right: SelectorApRight<'a>,
     }
     #[derive(Debug)]
     pub struct SelectorApRight<'a> {
-        pub selector: SelectorOp<'a>
+        pub selector: SelectorOp<'a>,
     }
     #[derive(Debug)]
     pub enum SelectorOp<'a> {
         Named(NamedSelector<'a>),
-        Bracket(BracketSelector<'a>)
+        Bracket(BracketSelector<'a>),
     }
     #[derive(Debug)]
     pub struct NamedSelector<'a> {
         pub dot: primitive::Dot<'a>,
-        pub name: primitive::Ident<'a>
+        pub name: primitive::Ident<'a>,
     }
     #[derive(Debug)]
     pub struct BracketSelector<'a> {
         pub left: primitive::BracketLeft<'a>,
         pub expr: Box<Expr<'a>>,
-        pub right: primitive::BracketRight<'a>
+        pub right: primitive::BracketRight<'a>,
     }
 
     pub mod scope {
-        use std::collections::HashSet;
         use crate::rex::parse::{AttributeValue, Expr, Node, NodeOrBlock, SelectorOp, Var};
         use crate::View;
+        use std::collections::HashSet;
 
         #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
         pub enum Scope {
             Global,
-            Local
+            Local,
         }
     }
 
     pub mod typ {
+        use crate::rex::parse::primitive::{Comma, Lit};
+        use crate::rex::parse::scope::Scope;
+        use crate::rex::parse::{
+            primitive, Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block,
+            Error, Expr, For, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorApRight,
+            SelectorOp, UnaryAp, UnaryOp, Var,
+        };
+        use crate::rex::View;
+        use crate::util::HashMultimap;
         use std::cmp::Ordering;
         use std::collections::{BTreeMap, HashMap, HashSet};
         use std::hash::{Hash, Hasher};
         use std::ops::{Add, Deref};
-        use crate::rex::parse::{Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block, Error, Expr, For, If, Node, NodeOrBlock, primitive, Punctuated, SelectorAp, SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var};
-        use crate::rex::parse::primitive::{Comma, Lit};
-        use crate::rex::parse::scope::Scope;
-        use crate::rex::View;
-        use crate::util::HashMultimap;
 
         #[derive(Clone, Debug, Hash)]
         pub enum AbstractType {
@@ -1536,7 +1573,7 @@ pub mod parse {
             // IntLike, Int, Bool, Float
             Number,
             // Int, Bool
-            IntLike
+            IntLike,
         }
         #[derive(Clone, Debug, PartialEq, Hash)]
         pub enum PrimitiveType {
@@ -1548,19 +1585,18 @@ pub mod parse {
             Int,
             Float,
             Bool,
-            Node
+            Node,
         }
 
         #[derive(Clone, Debug, Hash)]
         pub enum Type {
             Abstract(AbstractType),
-            Primitive(PrimitiveType)
+            Primitive(PrimitiveType),
         }
 
         pub struct Typed;
 
         impl Typed {
-
             fn min(vars: &HashSet<&mut Var>) -> Type {
                 let mut iter = vars.iter();
                 let mut min = iter.next().unwrap().typ.clone();
@@ -1582,12 +1618,12 @@ pub mod parse {
                         } else if right_typ <= &Type::INT_LIKE {
                             right_typ.clone()
                         } else {
-                            return Err(Error::TypeError(right_typ.clone(), Type::INT_LIKE))
+                            return Err(Error::TypeError(right_typ.clone(), Type::INT_LIKE));
                         }
                     }
                     UnaryOp::Not(_) => {
                         if right_typ != &Type::BOOL {
-                            return Err(Error::TypeError(right_typ.clone(), Type::BOOL))
+                            return Err(Error::TypeError(right_typ.clone(), Type::BOOL));
                         }
                         Type::BOOL
                     }
@@ -1595,14 +1631,17 @@ pub mod parse {
                 Ok(UnaryAp {
                     typ,
                     op,
-                    right: Box::new(right)
+                    right: Box::new(right),
                 })
             }
 
-            pub fn sel_ap<'a>(mut left: Expr<'a>, right: SelectorApRight<'a>) -> Result<SelectorAp<'a>, Error> {
+            pub fn sel_ap<'a>(
+                mut left: Expr<'a>,
+                right: SelectorApRight<'a>,
+            ) -> Result<SelectorAp<'a>, Error> {
                 /*
                  * Type inference of left type
-                */
+                 */
                 let left_typ = left.typ();
                 let typ = match &right.selector {
                     SelectorOp::Named(named) => {
@@ -1614,9 +1653,8 @@ pub mod parse {
                         } else if left_typ.is_object() {
                             left.infer(&(left_typ + &typ)?);
                             left.typ().object_inner(sel_name).unwrap().clone()
-                        }
-                        else {
-                            return Err(Error::TypeError(left_typ.clone(), typ))
+                        } else {
+                            return Err(Error::TypeError(left_typ.clone(), typ));
                         }
                     }
                     SelectorOp::Bracket(_) => {
@@ -1627,18 +1665,21 @@ pub mod parse {
                         } else if left_typ.is_array() {
                             left_typ.array_inner().clone()
                         } else {
-                            return Err(Error::TypeError(left_typ.clone(), typ))
+                            return Err(Error::TypeError(left_typ.clone(), typ));
                         }
                     }
                 };
                 Ok(SelectorAp {
                     typ,
                     expr: Box::new(left),
-                    right
+                    right,
                 })
             }
 
-            pub fn bin_ap<'a>(mut left: Expr<'a>, mut right: BinaryApRight<'a>) -> Result<BinaryAp<'a>, Error> {
+            pub fn bin_ap<'a>(
+                mut left: Expr<'a>,
+                mut right: BinaryApRight<'a>,
+            ) -> Result<BinaryAp<'a>, Error> {
                 let mut left_typ = &left.typ().clone();
                 let mut right_typ = &right.right.typ().clone();
 
@@ -1699,20 +1740,25 @@ pub mod parse {
                     BinaryOp::Multiplied(_) | BinaryOp::Divided(_) | BinaryOp::Minus(_) => {
                         if left_typ == &Type::STRING || right_typ == &Type::STRING {
                             None
-                        } else if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                        } else if left_typ == &Type::ANY
+                        /* && right_typ == &Type::ANY can be omitted. This should be always true */
+                        {
                             // Both operands are any
                             left.infer(&Type::NUMBER);
                             right.right.infer(&Type::NUMBER);
                             Some(Type::NUMBER)
-                        } else { // ls & rs <= number
+                        } else {
+                            // ls & rs <= number
                             // calculate the winning number type float < int < bool < int_like < number
                             Some(Type::number_min(left_typ, right_typ).clone())
                         }
-                    },
+                    }
                     BinaryOp::Plus(_) => {
                         if left_typ == &Type::STRING || right_typ == &Type::STRING {
                             Some(Type::STRING)
-                        } else if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                        } else if left_typ == &Type::ANY
+                        /* && right_typ == &Type::ANY can be omitted. This should be always true */
+                        {
                             left.infer(&Type::ADD_AND_EQ);
                             right.right.infer(&Type::ADD_AND_EQ);
                             Some(Type::ADD_AND_EQ)
@@ -1720,21 +1766,26 @@ pub mod parse {
                             // calculate the winning number type float < int < bool < int_like < number
                             Some(Type::number_min(left_typ, right_typ).clone())
                         }
-                    },
+                    }
                     BinaryOp::Modulo(_) => {
-                        if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
+                        if left_typ == &Type::ANY
+                        /* && right_typ == &Type::ANY can be omitted. This should be always true */
+                        {
                             left.infer(&Type::INT_LIKE);
                             right.right.infer(&Type::INT_LIKE);
                             Some(Type::INT_LIKE)
-                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE) {
+                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE)
+                        {
                             None
                         } else {
                             Some(Type::INT)
                         }
-                    },
+                    }
                     BinaryOp::And(_) | BinaryOp::Or(_) => {
-                        if left_typ == &Type::ANY /* && right_typ == &Type::ANY can be omitted. This should be always true */ {
-                            left.infer(& Type::BOOL);
+                        if left_typ == &Type::ANY
+                        /* && right_typ == &Type::ANY can be omitted. This should be always true */
+                        {
+                            left.infer(&Type::BOOL);
                             right.right.infer(&Type::BOOL);
                             Some(Type::BOOL)
                         } else if left_typ != &Type::BOOL || right_typ != &Type::BOOL {
@@ -1743,36 +1794,41 @@ pub mod parse {
                         } else {
                             Some(Type::BOOL)
                         }
-                    },
+                    }
                     BinaryOp::BitAnd(_) | BinaryOp::BitOr(_) | BinaryOp::BitXor(_) => {
-                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */  {
+                        if left_typ == &Type::ANY
+                        /* && right_typ == &Type::Any can be omitted this should be always true */
+                        {
                             left.infer(&Type::INT_LIKE);
                             right.right.infer(&Type::INT_LIKE);
                             Some(Type::INT_LIKE)
-                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE)  {
+                        } else if !(left_typ <= &Type::INT_LIKE) || !(right_typ <= &Type::INT_LIKE)
+                        {
                             None
                         } else {
                             Some(Type::number_min(left_typ, right_typ).clone())
                         }
-                    },
+                    }
                     // Current restriction can only compare primitives (strings, numbers, int_likes, floats, ints, bools)
-                    BinaryOp::Eq(_) |
-                    BinaryOp::Ne(_) => {
-                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */  {
+                    BinaryOp::Eq(_) | BinaryOp::Ne(_) => {
+                        if left_typ == &Type::ANY
+                        /* && right_typ == &Type::Any can be omitted this should be always true */
+                        {
                             left.infer(&Type::ADD_AND_EQ);
                             right.right.infer(&Type::ADD_AND_EQ);
                             Some(Type::ADD_AND_EQ)
-                        } else if !(left_typ <= &Type::ADD_AND_EQ) || !(right_typ <= &Type::ADD_AND_EQ) {
+                        } else if !(left_typ <= &Type::ADD_AND_EQ)
+                            || !(right_typ <= &Type::ADD_AND_EQ)
+                        {
                             None
                         } else {
                             Some(Type::BOOL)
                         }
-                    },
-                    BinaryOp::Le(_) |
-                    BinaryOp::Ge(_) |
-                    BinaryOp::Lt(_) |
-                    BinaryOp::Gt(_) => {
-                        if left_typ == &Type::ANY /* && right_typ == &Type::Any can be omitted this should be always true */ {
+                    }
+                    BinaryOp::Le(_) | BinaryOp::Ge(_) | BinaryOp::Lt(_) | BinaryOp::Gt(_) => {
+                        if left_typ == &Type::ANY
+                        /* && right_typ == &Type::Any can be omitted this should be always true */
+                        {
                             left.infer(&Type::NUMBER);
                             right.right.infer(&Type::NUMBER);
                             Some(Type::NUMBER)
@@ -1781,22 +1837,23 @@ pub mod parse {
                         } else {
                             Some(Type::BOOL)
                         }
-                    },
+                    }
                 };
                 let typ = match res_typ {
                     Some(t) => t,
-                    None => return Err(Error::UnsupportedOperation)
+                    None => return Err(Error::UnsupportedOperation),
                 };
                 Ok(BinaryAp {
                     typ,
                     left: Box::new(left),
-                    right
+                    right,
                 })
             }
 
             pub fn ap<'a>(mut left: Expr<'a>, right: ApRight<'a>) -> Result<Ap<'a>, Error> {
                 let left_typ = left.typ();
-                let mut arg_types: Vec<Type> = right.group.expr.args().map(|e| e.typ().clone()).collect();
+                let mut arg_types: Vec<Type> =
+                    right.group.expr.args().map(|e| e.typ().clone()).collect();
                 // push return type
                 arg_types.push(Type::ANY);
                 let f_typ = Type::function(arg_types);
@@ -1808,14 +1865,14 @@ pub mod parse {
                         left.infer(&(left_typ + &f_typ)?);
                         left.typ().target_typ().clone()
                     } else {
-                        return Err(Error::TypeError(left_typ.clone(), f_typ.clone()))
+                        return Err(Error::TypeError(left_typ.clone(), f_typ.clone()));
                     }
                 };
                 left.infer(&f_typ);
                 Ok(Ap {
                     typ,
                     expr: Box::new(left),
-                    right
+                    right,
                 })
             }
 
@@ -1823,14 +1880,21 @@ pub mod parse {
                 if0: primitive::If<'a>,
                 mut condition: Expr<'a>,
                 mut then_branch: Block<'a>,
-                mut elseif_branches: Vec<(primitive::Else<'a>, primitive::If<'a>, Box<Expr<'a>>, Block<'a>)>,
-                mut else_branch: (primitive::Else<'a>, Block<'a>)
+                mut elseif_branches: Vec<(
+                    primitive::Else<'a>,
+                    primitive::If<'a>,
+                    Box<Expr<'a>>,
+                    Block<'a>,
+                )>,
+                mut else_branch: (primitive::Else<'a>, Block<'a>),
             ) -> Result<If<'a>, Error> {
                 // Type check and type inference
                 let mut any_expr_mut = Vec::with_capacity(2 + elseif_branches.len());
                 any_expr_mut.push(&mut then_branch.expr);
                 any_expr_mut.push(&mut else_branch.1.expr);
-                for (_, _, _, block) in &mut elseif_branches { any_expr_mut.push(&mut block.expr); }
+                for (_, _, _, block) in &mut elseif_branches {
+                    any_expr_mut.push(&mut block.expr);
+                }
                 let mut typ = Type::ANY;
                 for expr in &any_expr_mut {
                     let expr_typ = expr.typ();
@@ -1840,7 +1904,6 @@ pub mod parse {
                     if expr_typ < &typ {
                         typ = expr_typ.clone()
                     }
-
                 }
                 for expr in any_expr_mut {
                     if expr.typ() > &typ {
@@ -1852,10 +1915,12 @@ pub mod parse {
                 let mut all = condition.globals_mut();
                 all.union(then_branch.expr.globals_mut());
 
-                let else_if_globals: Vec<(HashMultimap<String, &mut Var<'a>>, HashMultimap<String, &mut Var<'a>>)> = elseif_branches.iter_mut()
-                    .map(|(_, _, cond, block)|
-                        (cond.globals_mut(), block.expr.globals_mut())
-                    )
+                let else_if_globals: Vec<(
+                    HashMultimap<String, &mut Var<'a>>,
+                    HashMultimap<String, &mut Var<'a>>,
+                )> = elseif_branches
+                    .iter_mut()
+                    .map(|(_, _, cond, block)| (cond.globals_mut(), block.expr.globals_mut()))
                     .collect();
 
                 for (cond_gl, block_gl) in else_if_globals {
@@ -1865,7 +1930,9 @@ pub mod parse {
                 all.union(else_branch.1.expr.globals_mut());
 
                 for (_, vars) in all {
-                    if vars.len() <= 1 { continue; }
+                    if vars.len() <= 1 {
+                        continue;
+                    }
                     let min_type = Self::min(&vars);
                     for var in vars {
                         var.typ = min_type.clone();
@@ -1878,16 +1945,23 @@ pub mod parse {
                     condition: Box::new(condition),
                     then_branch,
                     elseif_branches,
-                    else_branch
+                    else_branch,
                 })
             }
 
-            pub fn r#for<'a>(for0: primitive::For<'a>, mut binding: Var<'a>, in0: primitive::In<'a>, mut expr: Expr<'a>, mut block: Block<'a>) -> Result<For<'a>, Error> {
+            pub fn r#for<'a>(
+                for0: primitive::For<'a>,
+                mut binding: Var<'a>,
+                in0: primitive::In<'a>,
+                mut expr: Expr<'a>,
+                mut block: Block<'a>,
+            ) -> Result<For<'a>, Error> {
                 // Finds all occurrences of this binding in the block expression and find its type
                 let binding_name = binding.name.text.span.value();
                 block.expr.check_var_duplicated(binding_name)?;
                 if let Some(binding_typ) = block.expr.find_var_typ_and_infer(binding_name)? {
                     binding.typ = binding_typ.clone();
+                    println!("Binding type: {:?}", binding_typ);
                 }
                 let required_expr_typ = Type::array(binding.typ.clone());
                 let expr_typ = expr.typ();
@@ -1908,7 +1982,9 @@ pub mod parse {
                 all.union(block.expr.globals_mut());
 
                 for (_, vars) in all {
-                    if vars.len() <= 1 { continue; }
+                    if vars.len() <= 1 {
+                        continue;
+                    }
                     let typ = Self::min(&vars);
                     for var in vars {
                         var.typ = typ.clone();
@@ -1921,7 +1997,7 @@ pub mod parse {
                     binding,
                     in0,
                     expr: Box::new(expr),
-                    block
+                    block,
                 })
             }
         }
@@ -1946,7 +2022,7 @@ pub mod parse {
             }
 
             #[inline]
-            pub fn object<const N: usize>(attributes: [(String, Type);N]) -> Type {
+            pub fn object<const N: usize>(attributes: [(String, Type); N]) -> Type {
                 Type::Primitive(PrimitiveType::Object(BTreeMap::from(attributes)))
             }
 
@@ -1960,7 +2036,7 @@ pub mod parse {
             pub fn is_abstract(&self) -> bool {
                 match self {
                     Type::Abstract(_) => true,
-                    _ => false
+                    _ => false,
                 }
             }
 
@@ -1968,7 +2044,7 @@ pub mod parse {
             pub fn is_array(&self) -> bool {
                 match self {
                     Type::Primitive(PrimitiveType::Array(_)) => true,
-                    _ => false
+                    _ => false,
                 }
             }
 
@@ -1976,7 +2052,7 @@ pub mod parse {
             pub fn is_object(&self) -> bool {
                 match self {
                     Type::Primitive(PrimitiveType::Object(_)) => true,
-                    _ => false
+                    _ => false,
                 }
             }
 
@@ -1984,11 +2060,10 @@ pub mod parse {
             pub fn is_function(&self) -> bool {
                 match self {
                     Type::Primitive(PrimitiveType::Function(_)) => true,
-                    _ => false
+                    _ => false,
                 }
             }
 
-            #[inline]
             pub fn object_inner(&self, sel_name: &str) -> Option<&Type> {
                 let Type::Primitive(PrimitiveType::Object(attributes)) = self else {
                     panic!("Can't access selector on non object type!");
@@ -1996,7 +2071,6 @@ pub mod parse {
                 attributes.get(sel_name)
             }
 
-            #[inline]
             pub fn infer_object_inner(&mut self, sel_name: &str, typ: &Type) {
                 if let Some(t) = self.object_inner(sel_name) {
                     debug_assert!(typ <= t);
@@ -2007,7 +2081,6 @@ pub mod parse {
                 attributes.insert(sel_name.into(), typ.clone());
             }
 
-            #[inline]
             pub fn array_inner(&self) -> &Type {
                 let Type::Primitive(PrimitiveType::Array(inner)) = self else {
                     panic!("Can't access inner type on non array type!");
@@ -2015,7 +2088,6 @@ pub mod parse {
                 &inner
             }
 
-            #[inline]
             pub fn infer_array_inner(&mut self, typ: &Type) {
                 let Type::Primitive(PrimitiveType::Array(inner)) = self else {
                     panic!("Can't access inner type on non array type!");
@@ -2024,7 +2096,6 @@ pub mod parse {
                 *inner = Box::new(typ.clone());
             }
 
-            #[inline]
             pub fn target_typ(&self) -> &Type {
                 let Type::Primitive(PrimitiveType::Function(arg_types)) = self else {
                     panic!("Can't access inner type on non array type!");
@@ -2032,7 +2103,6 @@ pub mod parse {
                 arg_types.last().unwrap()
             }
 
-            #[inline]
             pub fn infer_target_typ(&mut self, target_typ: &Type) {
                 let Type::Primitive(PrimitiveType::Function(arg_types)) = self else {
                     panic!("Can't access inner type on non array type!");
@@ -2042,24 +2112,25 @@ pub mod parse {
                 *last_mut = target_typ.clone();
             }
 
-            #[inline]
             pub fn number_min<'a>(lhs: &'a Self, rhs: &'a Self) -> &'a Self {
                 match lhs {
-                    Type::Abstract(AbstractType::Number) | Type::Abstract(AbstractType::IntLike) => match rhs {
+                    Type::Abstract(AbstractType::Number)
+                    | Type::Abstract(AbstractType::IntLike) => match rhs {
                         Type::Abstract(AbstractType::Number) => lhs,
                         Type::Abstract(AbstractType::IntLike) | Type::Primitive(_) => rhs,
-                        _ => panic!("rhs must be number!")
+                        _ => panic!("rhs must be number!"),
                     },
                     Type::Primitive(PrimitiveType::Float) => lhs,
                     Type::Primitive(PrimitiveType::Int) | Type::Primitive(PrimitiveType::Bool) => {
                         match rhs {
                             Type::Abstract(_) => lhs,
-                            Type::Primitive(PrimitiveType::Float) | Type::Primitive(PrimitiveType::Int) => rhs,
+                            Type::Primitive(PrimitiveType::Float)
+                            | Type::Primitive(PrimitiveType::Int) => rhs,
                             Type::Primitive(PrimitiveType::Bool) => lhs,
-                            _ => panic!("rhs must be number!")
+                            _ => panic!("rhs must be number!"),
                         }
                     }
-                    _ => panic!("lhs must be a number!")
+                    _ => panic!("lhs must be a number!"),
                 }
             }
 
@@ -2070,7 +2141,10 @@ pub mod parse {
                 }
             }
 
-            fn partial_cmp_attributes_helper(more: &BTreeMap<String, Type>, less: &BTreeMap<String, Type>) -> Option<Ordering> {
+            fn partial_cmp_attributes_helper(
+                more: &BTreeMap<String, Type>,
+                less: &BTreeMap<String, Type>,
+            ) -> Option<Ordering> {
                 debug_assert!(more.len() >= less.len());
                 let mut covered = 0;
                 let mut one_less = false;
@@ -2099,8 +2173,10 @@ pub mod parse {
                 }
             }
 
-            #[inline]
-            fn partial_cmp_attributes(lhs: &BTreeMap<String, Type>, rhs: &BTreeMap<String, Type>) -> Option<Ordering> {
+            fn partial_cmp_attributes(
+                lhs: &BTreeMap<String, Type>,
+                rhs: &BTreeMap<String, Type>,
+            ) -> Option<Ordering> {
                 if lhs.len() >= rhs.len() {
                     Self::partial_cmp_attributes_helper(lhs, rhs)
                 } else {
@@ -2149,12 +2225,12 @@ pub mod parse {
                 match self {
                     Type::Abstract(left) => match rhs {
                         Type::Abstract(right) => left + right,
-                        Type::Primitive(right) => right + left
+                        Type::Primitive(right) => right + left,
                     },
                     Type::Primitive(left) => match rhs {
                         Type::Abstract(right) => left + right,
-                        Type::Primitive(right) => left + right
-                    }
+                        Type::Primitive(right) => left + right,
+                    },
                 }
             }
         }
@@ -2166,23 +2242,33 @@ pub mod parse {
                 match rhs {
                     AbstractType::Any => Ok(Type::Primitive(self.clone())),
                     AbstractType::AddAndEq => match self {
-                        PrimitiveType::String | PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => {
-                            Ok(Type::Primitive(self.clone()))
-                        }
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
-                    }
+                        PrimitiveType::String
+                        | PrimitiveType::Int
+                        | PrimitiveType::Float
+                        | PrimitiveType::Bool => Ok(Type::Primitive(self.clone())),
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Abstract(rhs.clone()),
+                        )),
+                    },
                     AbstractType::Number => match self {
                         PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => {
                             Ok(Type::Primitive(self.clone()))
                         }
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
-                    }
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Abstract(rhs.clone()),
+                        )),
+                    },
                     AbstractType::IntLike => match self {
                         PrimitiveType::Int | PrimitiveType::Bool => {
                             Ok(Type::Primitive(self.clone()))
                         }
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Abstract(rhs.clone())))
-                    }
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Abstract(rhs.clone()),
+                        )),
+                    },
                 }
             }
         }
@@ -2195,21 +2281,30 @@ pub mod parse {
                     PrimitiveType::Function(left_args) => match rhs {
                         PrimitiveType::Function(right_args) => {
                             if left_args.len() != right_args.len() {
-                                return Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                                return Err(Error::TypeError(
+                                    Type::Primitive(self.clone()),
+                                    Type::Primitive(rhs.clone()),
+                                ));
                             }
                             let mut res_args = vec![];
                             for (left, right) in left_args.iter().zip(right_args.iter()) {
                                 res_args.push((left + right)?);
                             }
                             Ok(Type::Primitive(PrimitiveType::Function(res_args)))
-                        },
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                        }
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Primitive(rhs.clone()),
+                        )),
                     },
                     PrimitiveType::Array(left) => match rhs {
-                        PrimitiveType::Array(right) => {
-                            Ok(Type::Primitive(PrimitiveType::Array(Box::new((left.as_ref() + right.as_ref())?))))
-                        },
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                        PrimitiveType::Array(right) => Ok(Type::Primitive(PrimitiveType::Array(
+                            Box::new((left.as_ref() + right.as_ref())?),
+                        ))),
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Primitive(rhs.clone()),
+                        )),
                     },
                     PrimitiveType::Object(left) => match rhs {
                         PrimitiveType::Object(right) => {
@@ -2226,9 +2321,15 @@ pub mod parse {
                             }
                             Ok(Type::Primitive(PrimitiveType::Object(res)))
                         }
-                        _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                        _ => Err(Error::TypeError(
+                            Type::Primitive(self.clone()),
+                            Type::Primitive(rhs.clone()),
+                        )),
                     },
-                    _ => Err(Error::TypeError(Type::Primitive(self.clone()), Type::Primitive(rhs.clone())))
+                    _ => Err(Error::TypeError(
+                        Type::Primitive(self.clone()),
+                        Type::Primitive(rhs.clone()),
+                    )),
                 }
             }
         }
@@ -2241,16 +2342,19 @@ pub mod parse {
                 match self {
                     AbstractType::Any => Ok(Type::Abstract(rhs.clone())),
                     AbstractType::AddAndEq => match rhs {
-                        AbstractType::Any | AbstractType::AddAndEq => Ok(Type::Abstract(AbstractType::AddAndEq)),
+                        AbstractType::Any | AbstractType::AddAndEq => {
+                            Ok(Type::Abstract(AbstractType::AddAndEq))
+                        }
                         AbstractType::Number => Ok(Type::Abstract(AbstractType::Number)),
-                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike))
+                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike)),
                     },
                     AbstractType::Number => match rhs {
-                        AbstractType::Any | AbstractType::Number | AbstractType::AddAndEq => Ok(Type::Abstract(AbstractType::Number)),
-                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike))
+                        AbstractType::Any | AbstractType::Number | AbstractType::AddAndEq => {
+                            Ok(Type::Abstract(AbstractType::Number))
+                        }
+                        AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike)),
                     },
                     AbstractType::IntLike => Ok(Type::Abstract(AbstractType::IntLike)),
-
                 }
             }
         }
@@ -2262,12 +2366,12 @@ pub mod parse {
                 match self {
                     Type::Abstract(self_typ) => match other {
                         Type::Abstract(other_typ) => self_typ == other_typ,
-                        Type::Primitive(_) => false
-                    }
+                        Type::Primitive(_) => false,
+                    },
                     Type::Primitive(self_typ) => match other {
                         Type::Abstract(_) => false,
-                        Type::Primitive(other_typ) => self_typ == other_typ
-                    }
+                        Type::Primitive(other_typ) => self_typ == other_typ,
+                    },
                 }
             }
         }
@@ -2285,24 +2389,30 @@ pub mod parse {
                                 } else {
                                     None
                                 }
-                            },
+                            }
                             PrimitiveType::Array(inner) => {
                                 if let PrimitiveType::Array(self_inner) = prim {
                                     self_inner.partial_cmp(inner)
                                 } else {
                                     None
                                 }
-                            },
+                            }
                             PrimitiveType::Function(arg_types) => {
                                 if let PrimitiveType::Function(self_arg_types) = prim {
                                     Self::partial_cmp_arg_types(self_arg_types, arg_types)
                                 } else {
                                     None
                                 }
-                            },
-                            _ => if prim == other_prim { Some(Ordering::Equal) } else { None }
-                        }
-                    }
+                            }
+                            _ => {
+                                if prim == other_prim {
+                                    Some(Ordering::Equal)
+                                } else {
+                                    None
+                                }
+                            }
+                        },
+                    },
                 }
             }
         }
@@ -2310,20 +2420,43 @@ pub mod parse {
         impl PartialEq for AbstractType {
             fn eq(&self, other: &Self) -> bool {
                 match self {
-                    AbstractType::Any => if let AbstractType::Any = other { true } else { false }
-                    AbstractType::Number => if let AbstractType::Number = other { true } else { false }
-                    AbstractType::IntLike => if let AbstractType::IntLike = other { true } else { false }
-                    AbstractType::AddAndEq => if let AbstractType::AddAndEq = other { true } else { false }
+                    AbstractType::Any => {
+                        if let AbstractType::Any = other {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    AbstractType::Number => {
+                        if let AbstractType::Number = other {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    AbstractType::IntLike => {
+                        if let AbstractType::IntLike = other {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    AbstractType::AddAndEq => {
+                        if let AbstractType::AddAndEq = other {
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 }
             }
         }
-
 
         impl PartialEq<Type> for AbstractType {
             fn eq(&self, other: &Type) -> bool {
                 match other {
                     Type::Abstract(abs) => abs == self,
-                    Type::Primitive(_) => return false
+                    Type::Primitive(_) => return false,
                 }
             }
         }
@@ -2333,61 +2466,71 @@ pub mod parse {
                 match self {
                     AbstractType::Any => match other {
                         Type::Abstract(AbstractType::Any) => Some(Ordering::Equal),
-                        _ => Some(Ordering::Greater)
+                        _ => Some(Ordering::Greater),
                     },
                     AbstractType::AddAndEq => match other {
                         Type::Abstract(a) => match a {
                             AbstractType::Any => Some(Ordering::Less),
                             AbstractType::AddAndEq => Some(Ordering::Equal),
                             AbstractType::Number => Some(Ordering::Greater),
-                            AbstractType::IntLike => Some(Ordering::Greater)
+                            AbstractType::IntLike => Some(Ordering::Greater),
                         },
                         Type::Primitive(p) => match p {
-                            PrimitiveType::String | PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => Some(Ordering::Greater),
-                            _ => None
-                        }
+                            PrimitiveType::String
+                            | PrimitiveType::Int
+                            | PrimitiveType::Float
+                            | PrimitiveType::Bool => Some(Ordering::Greater),
+                            _ => None,
+                        },
                     },
                     AbstractType::Number => match other {
                         Type::Abstract(a) => match a {
                             AbstractType::Any => Some(Ordering::Less),
                             AbstractType::AddAndEq => Some(Ordering::Less),
                             AbstractType::Number => Some(Ordering::Equal),
-                            AbstractType::IntLike => Some(Ordering::Greater)
+                            AbstractType::IntLike => Some(Ordering::Greater),
                         },
                         Type::Primitive(p) => match p {
-                            PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => Some(Ordering::Greater),
-                            _ => None
-                        }
-                    }
+                            PrimitiveType::Int | PrimitiveType::Float | PrimitiveType::Bool => {
+                                Some(Ordering::Greater)
+                            }
+                            _ => None,
+                        },
+                    },
                     AbstractType::IntLike => match other {
                         Type::Abstract(a) => match a {
-                            AbstractType::Any | AbstractType::AddAndEq | AbstractType::Number => Some(Ordering::Less),
+                            AbstractType::Any | AbstractType::AddAndEq | AbstractType::Number => {
+                                Some(Ordering::Less)
+                            }
                             AbstractType::IntLike => Some(Ordering::Equal),
                         },
                         Type::Primitive(p) => match p {
                             PrimitiveType::Int | PrimitiveType::Bool => Some(Ordering::Greater),
-                            _ => None
-                        }
-                    }
+                            _ => None,
+                        },
+                    },
                 }
             }
         }
 
         impl<'a> View<'a> {
-
             pub fn globals_mut(&mut self) -> HashMultimap<String, &mut Var<'a>> {
-                self.root.as_mut().map(|x| match x {
-                    NodeOrBlock::Node(node) => node.globals_mut(),
-                    NodeOrBlock::Block(b) => b.expr.globals_mut()
-                })
+                self.root
+                    .as_mut()
+                    .map(|x| match x {
+                        NodeOrBlock::Node(node) => node.globals_mut(),
+                        NodeOrBlock::Block(b) => b.expr.globals_mut(),
+                    })
                     .unwrap_or(HashMultimap::new())
             }
 
             pub fn globals(&self) -> HashMultimap<String, &Var<'a>> {
-                self.root.as_ref().map(|x| match x {
-                    NodeOrBlock::Node(node) => node.globals(),
-                    NodeOrBlock::Block(b) => b.expr.globals()
-                })
+                self.root
+                    .as_ref()
+                    .map(|x| match x {
+                        NodeOrBlock::Node(node) => node.globals(),
+                        NodeOrBlock::Block(b) => b.expr.globals(),
+                    })
                     .unwrap_or(HashMultimap::new())
             }
         }
@@ -2421,7 +2564,6 @@ pub mod parse {
                         }
                         res
                     }
-
                 }
             }
 
@@ -2453,13 +2595,44 @@ pub mod parse {
                         }
                         res
                     }
+                }
+            }
 
+            pub fn find_var_typ_and_infer(
+                &mut self,
+                var_name: &str,
+            ) -> Result<Option<&mut Type>, Error> {
+                match self {
+                    Node::Text(_) => Ok(None),
+                    Node::Tag(tag) => {
+                        let mut vars = vec![];
+                        for attr in &mut tag.attributes {
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(b) => {
+                                    vars.push(b.expr.find_var_typ_and_infer(var_name)?);
+                                }
+                            }
+                        }
+                        if let Some(tag_block) = &mut tag.block {
+                            for child in &mut tag_block.children {
+                                match child {
+                                    NodeOrBlock::Node(node) => {
+                                        vars.push(node.find_var_typ_and_infer(var_name)?);
+                                    }
+                                    NodeOrBlock::Block(block) => {
+                                        vars.push(block.expr.find_var_typ_and_infer(var_name)?);
+                                    }
+                                }
+                            }
+                        }
+                        Expr::types_match_and_infer(vars)
+                    }
                 }
             }
         }
 
         impl<'a> Expr<'a> {
-
             pub fn globals(&self) -> HashMultimap<String, &Var<'a>> {
                 match self {
                     Expr::If(if0) => {
@@ -2481,12 +2654,13 @@ pub mod parse {
                     }
                     Expr::UnaryAp(un_ap) => un_ap.right.globals(),
                     Expr::Lit(_) => HashMultimap::new(),
-                    Expr::Var(var) => {
-                        match var.scope {
-                            Scope::Global => HashMultimap::from([(var.name.text.span.value().to_string(), vec![var])]),
-                            Scope::Local => HashMultimap::new()
-                        }
-                    }
+                    Expr::Var(var) => match var.scope {
+                        Scope::Global => HashMultimap::from([(
+                            var.name.text.span.value().to_string(),
+                            vec![var],
+                        )]),
+                        Scope::Local => HashMultimap::new(),
+                    },
                     Expr::Node(node) => node.globals(),
                     Expr::Empty(_) => HashMultimap::new(),
                     Expr::Group(group) => group.expr.globals(),
@@ -2495,7 +2669,7 @@ pub mod parse {
                         res.extend(bin_ap.left.globals());
                         res.extend(bin_ap.right.right.globals());
                         res
-                    },
+                    }
                     Expr::SelectorAp(sel_ap) => {
                         let mut res = HashMultimap::new();
                         res.extend(sel_ap.expr.globals());
@@ -2539,12 +2713,13 @@ pub mod parse {
                     }
                     Expr::UnaryAp(un_ap) => un_ap.right.globals_mut(),
                     Expr::Lit(_) => HashMultimap::new(),
-                    Expr::Var(var) => {
-                        match var.scope {
-                            Scope::Global => HashMultimap::from([(var.name.text.span.value().to_string(), vec![var])]),
-                            Scope::Local => HashMultimap::new()
-                        }
-                    }
+                    Expr::Var(var) => match var.scope {
+                        Scope::Global => HashMultimap::from([(
+                            var.name.text.span.value().to_string(),
+                            vec![var],
+                        )]),
+                        Scope::Local => HashMultimap::new(),
+                    },
                     Expr::Node(node) => node.globals_mut(),
                     Expr::Empty(_) => HashMultimap::new(),
                     Expr::Group(group) => group.expr.globals_mut(),
@@ -2553,7 +2728,7 @@ pub mod parse {
                         res.extend(bin_ap.left.globals_mut());
                         res.extend(bin_ap.right.right.globals_mut());
                         res
-                    },
+                    }
                     Expr::SelectorAp(sel_ap) => {
                         let mut res = HashMultimap::new();
                         res.extend(sel_ap.expr.globals_mut());
@@ -2586,7 +2761,7 @@ pub mod parse {
                         Lit::Str(_) => &Type::Primitive(PrimitiveType::String),
                         Lit::Int(_) => &Type::Primitive(PrimitiveType::Int),
                         Lit::Float(_) => &Type::Primitive(PrimitiveType::Float),
-                        Lit::Bool(_) => &Type::Primitive(PrimitiveType::Bool)
+                        Lit::Bool(_) => &Type::Primitive(PrimitiveType::Bool),
                     },
                     Expr::Var(var) => &var.typ,
                     Expr::Node(_) => &Type::Primitive(PrimitiveType::Node),
@@ -2594,11 +2769,13 @@ pub mod parse {
                     Expr::Group(group) => group.expr.typ(),
                     Expr::BinaryAp(bin_ap) => &bin_ap.typ,
                     Expr::SelectorAp(sel_ap) => &sel_ap.typ,
-                    Expr::Ap(ap) => &ap.typ
+                    Expr::Ap(ap) => &ap.typ,
                 }
             }
 
-            fn types_match_and_infer(types: Vec<Option<&mut Type>>) -> Result<Option<&mut Type>, Error> {
+            fn types_match_and_infer(
+                types: Vec<Option<&mut Type>>,
+            ) -> Result<Option<&mut Type>, Error> {
                 let mut min_typ = None;
                 let mut rest = vec![];
                 for typ_opt in types {
@@ -2618,7 +2795,7 @@ pub mod parse {
                                     min_typ = Some(min);
                                 }
                             }
-                        }
+                        },
                     }
                 }
                 if let Some(min) = &min_typ {
@@ -2635,7 +2812,10 @@ pub mod parse {
              * Finds the type of a given var name in an expression and adjusts all unequal types
              * if possible otherwise returns a type error
              */
-            pub fn find_var_typ_and_infer(&mut self, var_name: &str) -> Result<Option<&mut Type>, Error> {
+            pub fn find_var_typ_and_infer(
+                &mut self,
+                var_name: &str,
+            ) -> Result<Option<&mut Type>, Error> {
                 match self {
                     Expr::If(if0) => {
                         let mut vars = vec![];
@@ -2647,13 +2827,13 @@ pub mod parse {
                         }
                         vars.push(if0.else_branch.1.expr.find_var_typ_and_infer(var_name)?);
                         Self::types_match_and_infer(vars)
-                    },
+                    }
                     Expr::For(for0) => {
                         let mut vars = vec![];
                         vars.push(for0.expr.find_var_typ_and_infer(var_name)?);
                         vars.push(for0.block.expr.find_var_typ_and_infer(var_name)?);
                         Self::types_match_and_infer(vars)
-                    },
+                    }
                     Expr::UnaryAp(un_ap) => un_ap.right.find_var_typ_and_infer(var_name),
                     Expr::Lit(_) => Ok(None),
                     Expr::Var(var) => {
@@ -2662,8 +2842,8 @@ pub mod parse {
                         } else {
                             Ok(None)
                         }
-                    },
-                    Expr::Node(_) => Ok(None),
+                    }
+                    Expr::Node(node) => node.find_var_typ_and_infer(var_name),
                     Expr::Empty(_) => Ok(None),
                     Expr::Group(group) => group.expr.find_var_typ_and_infer(var_name),
                     Expr::BinaryAp(bin_ap) => {
@@ -2671,16 +2851,18 @@ pub mod parse {
                         vars.push(bin_ap.left.find_var_typ_and_infer(var_name)?);
                         vars.push(bin_ap.right.right.find_var_typ_and_infer(var_name)?);
                         Self::types_match_and_infer(vars)
-                    },
+                    }
                     Expr::SelectorAp(sel_ap) => {
                         let mut vars = vec![];
                         vars.push(sel_ap.expr.find_var_typ_and_infer(var_name)?);
                         match &mut sel_ap.right.selector {
                             SelectorOp::Named(_) => {}
-                            SelectorOp::Bracket(b) => vars.push(b.expr.find_var_typ_and_infer(var_name)?)
+                            SelectorOp::Bracket(b) => {
+                                vars.push(b.expr.find_var_typ_and_infer(var_name)?)
+                            }
                         }
                         Self::types_match_and_infer(vars)
-                    },
+                    }
                     Expr::Ap(ap) => {
                         let mut vars = vec![];
                         vars.push(ap.expr.find_var_typ_and_infer(var_name)?);
@@ -2703,37 +2885,37 @@ pub mod parse {
                         }
                         if0.else_branch.1.expr.check_var_duplicated(var_name)?;
                         Ok(())
-                    },
+                    }
                     Expr::For(for0) => {
                         if for0.binding.name.text.span.value() == var_name {
-                            return Err(Error::DuplicateVar(var_name.into()))
+                            return Err(Error::DuplicateVar(var_name.into()));
                         }
                         for0.expr.check_var_duplicated(var_name)?;
                         for0.block.expr.check_var_duplicated(var_name)?;
                         Ok(())
-                    },
+                    }
                     Expr::UnaryAp(un_ap) => {
                         un_ap.right.check_var_duplicated(var_name)?;
                         Ok(())
-                    },
+                    }
                     Expr::Lit(_) | Expr::Var(_) | Expr::Node(_) | Expr::Empty(_) => Ok(()),
                     Expr::Group(group) => {
                         group.expr.check_var_duplicated(var_name)?;
                         Ok(())
-                    },
+                    }
                     Expr::BinaryAp(bin_ap) => {
                         bin_ap.left.check_var_duplicated(var_name)?;
                         bin_ap.right.right.check_var_duplicated(var_name)?;
                         Ok(())
-                    },
+                    }
                     Expr::SelectorAp(sel_ap) => {
                         sel_ap.expr.check_var_duplicated(var_name)?;
                         match &mut sel_ap.right.selector {
                             SelectorOp::Named(_) => {}
-                            SelectorOp::Bracket(b) => b.expr.check_var_duplicated(var_name)?
+                            SelectorOp::Bracket(b) => b.expr.check_var_duplicated(var_name)?,
                         }
                         Ok(())
-                    },
+                    }
                     Expr::Ap(ap) => {
                         ap.expr.check_var_duplicated(var_name)?;
                         for arg in ap.right.group.expr.args_mut() {
@@ -2747,7 +2929,6 @@ pub mod parse {
             /**
              * Infers the type for a var by a given name and type
              */
-            #[inline]
             pub fn infer_var(&mut self, var_name: &str, typ: &Type) {
                 match self {
                     Expr::If(if0) => {
@@ -2758,30 +2939,30 @@ pub mod parse {
                             block.expr.infer_var(var_name, typ);
                         }
                         if0.else_branch.1.expr.infer_var(var_name, typ);
-                    },
+                    }
                     Expr::For(for0) => {
                         for0.expr.infer_var(var_name, typ);
                         for0.block.expr.infer_var(var_name, typ);
-                    },
+                    }
                     Expr::UnaryAp(un_ap) => un_ap.right.infer_var(var_name, typ),
                     Expr::Var(var) => {
                         if var.name.text.span.value() == var_name {
                             var.typ = typ.clone()
                         }
-                    },
-                    Expr::Node(_) | Expr::Empty(_) | Expr::Lit(_) => {},
+                    }
+                    Expr::Node(_) | Expr::Empty(_) | Expr::Lit(_) => {}
                     Expr::Group(group) => group.expr.infer_var(var_name, typ),
                     Expr::BinaryAp(bin_ap) => {
                         bin_ap.left.infer_var(var_name, typ);
                         bin_ap.right.right.infer_var(var_name, typ);
-                    },
+                    }
                     Expr::SelectorAp(sel_ap) => {
                         sel_ap.expr.infer_var(var_name, typ);
                         match &mut sel_ap.right.selector {
                             SelectorOp::Named(_) => {}
                             SelectorOp::Bracket(b) => b.expr.infer_var(var_name, typ),
                         }
-                    },
+                    }
                     Expr::Ap(ap) => {
                         ap.expr.infer_var(var_name, typ);
                         for arg in ap.right.group.expr.args_mut() {
@@ -2796,7 +2977,6 @@ pub mod parse {
              * This can only be done with types that are smaller equals the existing type.
              * NOTE: This function doesn't merge object types!
              */
-            #[inline]
             pub fn infer(&mut self, typ: &Type) {
                 match self {
                     Expr::If(if0) => {
@@ -2809,21 +2989,22 @@ pub mod parse {
                             }
                             if0.else_branch.1.expr.infer(typ);
                         }
-                    },
+                    }
+
                     Expr::For(for0) => {
                         debug_assert!(typ <= &for0.typ);
                         if typ < &for0.typ {
                             for0.typ = typ.clone();
                             for0.block.expr.infer(typ);
                         }
-                    },
+                    }
                     Expr::UnaryAp(un_ap) => {
                         debug_assert!(typ <= &un_ap.typ);
                         if typ < &un_ap.typ {
                             un_ap.typ = typ.clone();
                             un_ap.right.infer(typ);
                         }
-                    },
+                    }
                     Expr::Lit(lit) => match lit {
                         Lit::Str(_) => debug_assert!(typ == &Type::STRING),
                         Lit::Int(_) => debug_assert!(typ == &Type::INT),
@@ -2835,12 +3016,12 @@ pub mod parse {
                         if typ < &var.typ {
                             var.typ = typ.clone();
                         }
-                    },
+                    }
                     Expr::Node(_) => debug_assert!(typ == &Type::NODE),
                     Expr::Empty(_) => debug_assert!(typ == &Type::UNIT),
                     Expr::Group(group) => {
                         group.expr.infer(typ);
-                    },
+                    }
                     Expr::BinaryAp(bin_ap) => {
                         debug_assert!(typ <= &bin_ap.typ);
                         if typ < &bin_ap.typ {
@@ -2854,7 +3035,7 @@ pub mod parse {
                                 bin_ap.right.right.infer(typ);
                             }
                         }
-                    },
+                    }
                     Expr::SelectorAp(sel) => {
                         debug_assert!(typ <= &sel.typ);
                         if typ < &sel.typ {
@@ -2887,12 +3068,12 @@ pub mod parse {
 
             pub fn infer_scope_node(node: &mut Node, var: &Var, scope: Scope) {
                 match node {
-                    Node::Text(_) => {},
+                    Node::Text(_) => {}
                     Node::Tag(tag) => {
                         for attr in &mut tag.attributes {
                             match &mut attr.value {
                                 AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(block) => block.expr.infer_scope(var, scope)
+                                AttributeValue::Block(block) => block.expr.infer_scope(var, scope),
                             }
                         }
                         match &mut tag.block {
@@ -2900,8 +3081,12 @@ pub mod parse {
                             Some(block) => {
                                 for child in &mut block.children {
                                     match child {
-                                        NodeOrBlock::Node(node) => Self::infer_scope_node(node, var, scope),
-                                        NodeOrBlock::Block(block) => block.expr.infer_scope(var, scope)
+                                        NodeOrBlock::Node(node) => {
+                                            Self::infer_scope_node(node, var, scope)
+                                        }
+                                        NodeOrBlock::Block(block) => {
+                                            block.expr.infer_scope(var, scope)
+                                        }
                                     }
                                 }
                             }
@@ -2910,7 +3095,6 @@ pub mod parse {
                 }
             }
 
-            #[inline]
             pub fn infer_scope(&mut self, var: &Var, scope: Scope) {
                 match self {
                     Expr::If(if0) => {
@@ -2920,7 +3104,7 @@ pub mod parse {
                             block.expr.infer_scope(var, scope);
                         }
                         if0.else_branch.1.expr.infer_scope(var, scope);
-                    },
+                    }
                     Expr::For(for0) => {
                         for0.expr.infer_scope(var, scope);
                         for0.block.expr.infer_scope(var, scope);
@@ -2928,17 +3112,15 @@ pub mod parse {
                     Expr::UnaryAp(un_ap) => {
                         un_ap.right.infer_scope(var, scope);
                     }
-                    Expr::Lit(_) => {},
+                    Expr::Lit(_) => {}
                     Expr::Var(this) => {
                         if this.name == var.name {
                             this.scope = scope;
                         }
-                    },
-                    Expr::Node(node) => Self::infer_scope_node(node, var, scope),
-                    Expr::Empty(_) => {},
-                    Expr::Group(group) => {
-                        group.expr.infer_scope(var, scope)
                     }
+                    Expr::Node(node) => Self::infer_scope_node(node, var, scope),
+                    Expr::Empty(_) => {}
+                    Expr::Group(group) => group.expr.infer_scope(var, scope),
                     Expr::BinaryAp(bin_ap) => {
                         bin_ap.left.infer_scope(var, scope);
                         bin_ap.right.right.infer_scope(var, scope);
@@ -2947,7 +3129,7 @@ pub mod parse {
                         sel.expr.infer_scope(var, scope);
                         match &mut sel.right.selector {
                             SelectorOp::Named(_) => {}
-                            SelectorOp::Bracket(b) => b.expr.infer_scope(var, scope)
+                            SelectorOp::Bracket(b) => b.expr.infer_scope(var, scope),
                         }
                     }
                     Expr::Ap(ap) => {
@@ -2970,9 +3152,9 @@ pub mod parse {
 
         impl<'a> PartialEq for Var<'a> {
             fn eq(&self, other: &Self) -> bool {
-                self.scope == other.scope &&
-                self.typ == other.typ &&
-                self.name.text.span.value() == other.name.text.span.value()
+                self.scope == other.scope
+                    && self.typ == other.typ
+                    && self.name.text.span.value() == other.name.text.span.value()
             }
         }
 
@@ -2987,9 +3169,14 @@ pub mod parse {
         use crate::cursor::Cursor;
         use crate::parser::{Parse, Parser};
         use crate::rex::lex;
-        use crate::rex::parse::{ApRight, Attribute, AttributeValue, Block, BracketSelector, Error, Expr, For, Group, If, BinaryApRight, NamedSelector, Node, NodeOrBlock, primitive, BinaryOp, Punctuated, SelectorAp, SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, Var, View, UnaryAp, UnaryOp, PunctuatedIter, PunctuatedIterMut};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::{Type, Typed};
+        use crate::rex::parse::{
+            primitive, ApRight, Attribute, AttributeValue, BinaryApRight, BinaryOp, Block,
+            BracketSelector, Error, Expr, For, Group, If, NamedSelector, Node, NodeOrBlock,
+            Punctuated, PunctuatedIter, PunctuatedIterMut, SelectorAp, SelectorApRight, SelectorOp,
+            TagBlock, TagNode, TextNode, UnaryAp, UnaryOp, Var, View,
+        };
 
         impl From<lex::Error> for Error {
             fn from(err: lex::Error) -> Self {
@@ -2999,14 +3186,10 @@ pub mod parse {
 
         impl<'a, P, S> Punctuated<'a, P, S> {
             pub(crate) fn args(&self) -> PunctuatedIter<'_, 'a, P, S> {
-                PunctuatedIter {
-                    inner: Some(self)
-                }
+                PunctuatedIter { inner: Some(self) }
             }
             pub(crate) fn args_mut(&mut self) -> PunctuatedIterMut<'_, 'a, P, S> {
-                PunctuatedIterMut {
-                    inner: Some(self)
-                }
+                PunctuatedIterMut { inner: Some(self) }
             }
         }
 
@@ -3044,7 +3227,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, root) = parser.opt_parse::<NodeOrBlock>();
                 let (mut parser, _) = parser.opt_parse_token::<lex::Whitespace>();
@@ -3052,10 +3237,8 @@ pub mod parse {
                     let next = parser.next().unwrap()?;
                     Err(Error::UnexpectedToken(next.span().owned()))
                 } else {
-                    Ok((parser, View {
-                        root
-                    }))
-                }
+                    Ok((parser, View { root }))
+                };
             }
         }
 
@@ -3063,7 +3246,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, node) = parser.opt_parse::<Node>();
                 match node {
                     Some(node) => Ok((parser, NodeOrBlock::Node(node))),
@@ -3079,7 +3264,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, tag) = parser.opt_parse::<TagNode>();
                 match tag {
                     Some(tag) => Ok((parser, Node::Tag(tag))),
@@ -3095,11 +3282,11 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, text) = parser.parse_token::<lex::Text>()?;
-                Ok((parser, TextNode {
-                    text
-                }))
+                Ok((parser, TextNode { text }))
             }
         }
 
@@ -3107,7 +3294,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, lt) = parser.parse::<primitive::Lt>()?;
                 let (mut parser, name) = parser.parse::<primitive::Ident>()?;
                 let mut attributes1 = Vec::new();
@@ -3118,8 +3307,8 @@ pub mod parse {
                         Some(attr) => {
                             attributes1.push(attr);
                             parser = parser1
-                        },
-                        None => break (parser1, attributes1)
+                        }
+                        None => break (parser1, attributes1),
                     }
                 };
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
@@ -3127,14 +3316,17 @@ pub mod parse {
                 let (parser, gt) = parser.parse::<primitive::Gt>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, block) = parser.opt_parse::<TagBlock>();
-                Ok((parser, TagNode {
-                    lt,
-                    name,
-                    attributes,
-                    div,
-                    gt,
-                    block
-                }))
+                Ok((
+                    parser,
+                    TagNode {
+                        lt,
+                        name,
+                        attributes,
+                        div,
+                        gt,
+                        block,
+                    },
+                ))
             }
         }
 
@@ -3142,7 +3334,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(mut parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                mut parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let mut children1 = Vec::new();
                 let (parser, children) = loop {
                     let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
@@ -3151,8 +3345,8 @@ pub mod parse {
                         Some(nb) => {
                             children1.push(nb);
                             parser = parser1;
-                        },
-                        None => break (parser1, children1)
+                        }
+                        None => break (parser1, children1),
                     }
                 };
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
@@ -3161,13 +3355,16 @@ pub mod parse {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, gt) = parser.parse::<primitive::Gt>()?;
-                Ok((parser, TagBlock {
-                    children,
-                    lt,
-                    div,
-                    name,
-                    gt
-                }))
+                Ok((
+                    parser,
+                    TagBlock {
+                        children,
+                        lt,
+                        div,
+                        name,
+                        gt,
+                    },
+                ))
             }
         }
 
@@ -3175,17 +3372,15 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, eq) = parser.parse::<primitive::Eq>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, value) = parser.parse::<AttributeValue>()?;
-                Ok((parser, Attribute {
-                    name,
-                    eq,
-                    value
-                }))
+                Ok((parser, Attribute { name, eq, value }))
             }
         }
 
@@ -3193,7 +3388,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, lit) = parser.opt_parse::<primitive::LitStr>();
                 match lit {
                     Some(lit) => Ok((parser, AttributeValue::StrLit(lit))),
@@ -3209,17 +3406,22 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::BraceLeft>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::BraceRight>()?;
-                Ok((parser, Block {
-                    left,
-                    expr: Box::new(expr),
-                    right
-                }))
+                Ok((
+                    parser,
+                    Block {
+                        left,
+                        expr: Box::new(expr),
+                        right,
+                    },
+                ))
             }
         }
 
@@ -3227,42 +3429,62 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error>  {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (mut parser, left) = {
                     let (parser, if0) = parser.opt_parse::<If>();
                     match if0 {
-                        Some(if0) => (parser,  Some(Expr::If(if0))),
+                        Some(if0) => (parser, Some(Expr::If(if0))),
                         None => {
                             let (parser, for0) = parser.opt_parse::<For>();
                             match for0 {
-                                Some(for0) => {
-                                    (parser, Some(Expr::For(for0)))
-                                },
+                                Some(for0) => (parser, Some(Expr::For(for0))),
                                 None => {
                                     let (parser, unary_ap) = parser.opt_parse::<UnaryAp>();
                                     match unary_ap {
                                         Some(unary_ap) => (parser, Some(Expr::UnaryAp(unary_ap))),
                                         None => {
-                                            let (parser, lit) = parser.opt_parse::<primitive::Lit>();
+                                            let (parser, lit) =
+                                                parser.opt_parse::<primitive::Lit>();
                                             match lit {
                                                 Some(lit) => (parser, Some(Expr::Lit(lit))),
                                                 None => {
-                                                    let (parser, group) = parser.opt_parse::<Group<Expr>>();
+                                                    let (parser, group) =
+                                                        parser.opt_parse::<Group<Expr>>();
                                                     match group {
-                                                        Some(group) => (parser, Some(Expr::Group(group))),
+                                                        Some(group) => {
+                                                            (parser, Some(Expr::Group(group)))
+                                                        }
                                                         None => {
-                                                            let (parser, var) = parser.opt_parse::<Var>();
+                                                            let (parser, var) =
+                                                                parser.opt_parse::<Var>();
                                                             match var {
-                                                                Some(var) => (parser, Some(Expr::Var(var))),
+                                                                Some(var) => {
+                                                                    (parser, Some(Expr::Var(var)))
+                                                                }
                                                                 None => {
-                                                                    let (parser, node) = parser.opt_parse::<Node>();
+                                                                    let (parser, node) =
+                                                                        parser.opt_parse::<Node>();
                                                                     match node {
-                                                                        Some(node) => (parser, Some(Expr::Node(node))),
+                                                                        Some(node) => (
+                                                                            parser,
+                                                                            Some(Expr::Node(node)),
+                                                                        ),
                                                                         None => {
                                                                             let (parser, empty) = parser.opt_parse::<primitive::Empty>();
                                                                             match empty {
-                                                                                Some(empty) => (parser, Some(Expr::Empty(empty))),
-                                                                                None => (parser, None)
+                                                                                Some(empty) => (
+                                                                                    parser,
+                                                                                    Some(
+                                                                                        Expr::Empty(
+                                                                                            empty,
+                                                                                        ),
+                                                                                    ),
+                                                                                ),
+                                                                                None => {
+                                                                                    (parser, None)
+                                                                                }
                                                                             }
                                                                         }
                                                                     }
@@ -3291,22 +3513,24 @@ pub mod parse {
                                 Some(right) => {
                                     parser = parser1;
                                     left = Expr::Ap(Typed::ap(left, right)?);
-                                },
+                                }
                                 None => {
                                     let (parser1, right) = parser1.opt_parse::<SelectorApRight>();
                                     match right {
                                         Some(right) => {
                                             parser = parser1;
                                             left = Expr::SelectorAp(Typed::sel_ap(left, right)?);
-                                        },
+                                        }
                                         None => {
-                                            let (parser1, right) = parser1.opt_parse::<BinaryApRight>();
+                                            let (parser1, right) =
+                                                parser1.opt_parse::<BinaryApRight>();
                                             match right {
                                                 Some(mut right) => {
                                                     parser = parser1;
-                                                    left = Expr::BinaryAp(Typed::bin_ap(left, right)?);
-                                                },
-                                                None => break (parser1, left)
+                                                    left =
+                                                        Expr::BinaryAp(Typed::bin_ap(left, right)?);
+                                                }
+                                                None => break (parser1, left),
                                             }
                                         }
                                     }
@@ -3314,11 +3538,11 @@ pub mod parse {
                             }
                         };
                         Ok((parser, left))
-                    },
+                    }
                     None => match parser.next() {
                         Some(next) => Err(Error::UnexpectedToken(next?.span().owned())),
-                        None => Err(Error::UnexpectedEof)
-                    }
+                        None => Err(Error::UnexpectedEof),
+                    },
                 }
             }
         }
@@ -3327,7 +3551,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, if0) = parser.parse::<primitive::If>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, condition) = parser.parse::<Expr>()?;
@@ -3348,15 +3574,18 @@ pub mod parse {
                             let (parser1, block) = parser1.parse::<Block>()?;
                             elseif_branches.push((else0, if0, Box::new(expr), block));
                             parser = parser1;
-                        },
+                        }
                         None => {
                             let (parser1, _) = parser1.opt_parse_token::<lex::Whitespace>();
                             let (parser1, block) = parser1.parse::<Block>()?;
-                            break (parser1, elseif_branches, (else0, block))
+                            break (parser1, elseif_branches, (else0, block));
                         }
                     }
                 };
-                Ok((parser, Typed::r#if(if0, condition, then_branch, elseif_branches, else_branch)?))
+                Ok((
+                    parser,
+                    Typed::r#if(if0, condition, then_branch, elseif_branches, else_branch)?,
+                ))
             }
         }
 
@@ -3364,14 +3593,16 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, for0) = parser.parse::<primitive::For>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, mut binding) = parser.parse::<Var>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, in0) = parser.parse::<primitive::In>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
-                let (parser, mut expr) = parser.parse::<Expr>()?;
+                let (parser, expr) = parser.parse::<Expr>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, mut block) = parser.parse::<Block>()?;
                 binding.scope = Scope::Local;
@@ -3381,26 +3612,29 @@ pub mod parse {
             }
         }
 
-        impl<'a, E> Parse for Group<'a, E> where
-            E: Parse<
-                Error=Error,
-                Token=Result<lex::Token<'a>, lex::Error>
-            >
+        impl<'a, E> Parse for Group<'a, E>
+        where
+            E: Parse<Error = Error, Token = Result<lex::Token<'a>, lex::Error>>,
         {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::ParenLeft>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<E>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::ParenRight>()?;
-                Ok((parser, Group {
-                    left,
-                    expr: Box::new(expr),
-                    right
-                }))
+                Ok((
+                    parser,
+                    Group {
+                        left,
+                        expr: Box::new(expr),
+                        right,
+                    },
+                ))
             }
         }
 
@@ -3408,7 +3642,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, mul) = parser.opt_parse::<primitive::Mul>();
                 match mul {
                     Some(mul) => Ok((parser, BinaryOp::Multiplied(mul))),
@@ -3425,21 +3661,37 @@ pub mod parse {
                                         match sub {
                                             Some(sub) => Ok((parser, BinaryOp::Minus(sub))),
                                             None => {
-                                                let (parser, mod0) = parser.opt_parse::<primitive::Mod>();
+                                                let (parser, mod0) =
+                                                    parser.opt_parse::<primitive::Mod>();
                                                 match mod0 {
-                                                    Some(mod0) => Ok((parser, BinaryOp::Modulo(mod0))),
+                                                    Some(mod0) => {
+                                                        Ok((parser, BinaryOp::Modulo(mod0)))
+                                                    }
                                                     None => {
-                                                        let (parser, and) = parser.opt_parse::<primitive::AndAnd>();
+                                                        let (parser, and) =
+                                                            parser.opt_parse::<primitive::AndAnd>();
                                                         match and {
-                                                            Some(and) => Ok((parser, BinaryOp::And(and))),
+                                                            Some(and) => {
+                                                                Ok((parser, BinaryOp::And(and)))
+                                                            }
                                                             None => {
-                                                                let (parser, or) = parser.opt_parse::<primitive::OrOr>();
+                                                                let (parser, or) = parser
+                                                                    .opt_parse::<primitive::OrOr>(
+                                                                );
                                                                 match or {
-                                                                    Some(or) => Ok((parser, BinaryOp::Or(or))),
+                                                                    Some(or) => Ok((
+                                                                        parser,
+                                                                        BinaryOp::Or(or),
+                                                                    )),
                                                                     None => {
                                                                         let (parser, bit_and) = parser.opt_parse::<primitive::And>();
                                                                         match bit_and {
-                                                                            Some(bit_and) => Ok((parser, BinaryOp::BitAnd(bit_and))),
+                                                                            Some(bit_and) => Ok((
+                                                                                parser,
+                                                                                BinaryOp::BitAnd(
+                                                                                    bit_and,
+                                                                                ),
+                                                                            )),
                                                                             None => {
                                                                                 let (parser, bit_or) = parser.opt_parse::<primitive::Or>();
                                                                                 match bit_or {
@@ -3508,15 +3760,20 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, primitive_op) = parser.parse::<BinaryOp>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<Expr>()?;
 
-                Ok((parser, BinaryApRight {
-                    op: primitive_op,
-                    right: Box::new(right)
-                }))
+                Ok((
+                    parser,
+                    BinaryApRight {
+                        op: primitive_op,
+                        right: Box::new(right),
+                    },
+                ))
             }
         }
 
@@ -3524,7 +3781,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, op) = parser.parse::<UnaryOp>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 // Parse expressions that are directly next to the unary op to lift them up in the parse tree
@@ -3544,11 +3803,13 @@ pub mod parse {
                                         match var {
                                             Some(var) => (parser, Expr::Var(var)),
                                             None => {
-                                                let (parser, group) = parser.opt_parse::<Group<Expr>>();
+                                                let (parser, group) =
+                                                    parser.opt_parse::<Group<Expr>>();
                                                 match group {
                                                     Some(group) => (parser, Expr::Group(group)),
                                                     None => {
-                                                        let (parser, expr) = parser.parse::<Expr>()?;
+                                                        let (parser, expr) =
+                                                            parser.parse::<Expr>()?;
                                                         (parser, expr)
                                                     }
                                                 }
@@ -3569,7 +3830,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, sub) = parser.opt_parse::<primitive::Sub>();
                 match sub {
                     Some(sub) => Ok((parser, UnaryOp::Neg(sub))),
@@ -3585,11 +3848,16 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, selector_op) = parser.parse::<SelectorOp>()?;
-                Ok((parser, SelectorApRight {
-                    selector: selector_op
-                }))
+                Ok((
+                    parser,
+                    SelectorApRight {
+                        selector: selector_op,
+                    },
+                ))
             }
         }
 
@@ -3597,7 +3865,9 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, named) = parser.opt_parse::<NamedSelector>();
                 match named {
                     Some(named) => Ok((parser, SelectorOp::Named(named))),
@@ -3613,16 +3883,15 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, dot) = parser.parse::<primitive::Dot>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
 
-                Ok((parser, NamedSelector {
-                    dot,
-                    name
-                }))
+                Ok((parser, NamedSelector { dot, name }))
             }
         }
 
@@ -3630,18 +3899,23 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, left) = parser.parse::<primitive::BracketLeft>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<Expr>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, right) = parser.parse::<primitive::BracketRight>()?;
 
-                Ok((parser, BracketSelector {
-                    left,
-                    expr: Box::new(expr),
-                    right
-                }))
+                Ok((
+                    parser,
+                    BracketSelector {
+                        left,
+                        expr: Box::new(expr),
+                        right,
+                    },
+                ))
             }
         }
 
@@ -3649,22 +3923,26 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
-                let (parser, group) = parser.parse::<Group<Punctuated<Expr, primitive::Comma>>>()?;
-                Ok((parser, ApRight {
-                    group
-                }))
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
+                let (parser, group) =
+                    parser.parse::<Group<Punctuated<Expr, primitive::Comma>>>()?;
+                Ok((parser, ApRight { group }))
             }
         }
 
-        impl<'a, P, S> Parse for Punctuated<'a, P, S> where
-            P: Parse<Error=Error, Token=Result<lex::Token<'a>, lex::Error>>,
-            S: Parse<Error=Error, Token=Result<lex::Token<'a>, lex::Error>>,
+        impl<'a, P, S> Parse for Punctuated<'a, P, S>
+        where
+            P: Parse<Error = Error, Token = Result<lex::Token<'a>, lex::Error>>,
+            S: Parse<Error = Error, Token = Result<lex::Token<'a>, lex::Error>>,
         {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, expr) = parser.parse::<P>()?;
                 let (parser, sep) = parser.opt_parse::<S>();
@@ -3672,14 +3950,17 @@ pub mod parse {
                     Some(sep) => {
                         let (parser, other) = parser.parse::<Punctuated<P, S>>()?;
                         (parser, Some((sep, Box::new(other))))
-                    },
-                    None => (parser, None)
+                    }
+                    None => (parser, None),
                 };
-                Ok((parser, Punctuated {
-                    expr: Box::new(expr),
-                    other,
-                    _a: Default::default()
-                }))
+                Ok((
+                    parser,
+                    Punctuated {
+                        expr: Box::new(expr),
+                        other,
+                        _a: Default::default(),
+                    },
+                ))
             }
         }
 
@@ -3687,13 +3968,18 @@ pub mod parse {
             type Error = Error;
             type Token = Result<lex::Token<'a>, lex::Error>;
 
-            fn parse<C: Cursor<Item=Self::Token>>(parser: Parser<C>) -> Result<(Parser<C>, Self), Self::Error> {
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
-                Ok((parser, Var {
-                    typ: Type::ANY,
-                    scope: Scope::Global,
-                    name
-                }))
+                Ok((
+                    parser,
+                    Var {
+                        typ: Type::ANY,
+                        scope: Scope::Global,
+                        name,
+                    },
+                ))
             }
         }
     }
