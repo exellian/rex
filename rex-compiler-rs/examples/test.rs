@@ -6,19 +6,7 @@ use std::io::Write;
 
 fn main() {
     let code = include_str!("../test-src/test.rex");
-    let mut lexer = rex::lex::Lexer::new(code);
-
-    /*
-        let mut tokens = vec![];
-        loop {
-            let token = lexer.next();
-            match token {
-                Some(tok) => tokens.push(tok.unwrap()),
-                None => break
-            }
-        }
-        println!("{:?}", tokens);
-    */
+    let lexer = rex::lex::Lexer::new(code);
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();

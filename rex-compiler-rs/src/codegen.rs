@@ -267,8 +267,7 @@ pub mod rs {
         };
         use crate::rex::View;
         use crate::util::HashMultimap;
-        use std::collections::{BTreeMap, HashMap, HashSet};
-        use std::convert;
+        use std::collections::{BTreeMap, HashMap};
 
         struct Structs {
             structs: HashMap<BTreeMap<String, Type>, String>,
@@ -386,14 +385,14 @@ pub mod rs {
                 format!("{}{}", ref_prefix, code)
             }
 
-            fn is_flattenable_node(typ: &Type) -> bool {
-                if let Type::Primitive(PrimitiveType::Node) = typ {
-                    return true;
-                }
+            fn flattenable_typ(typ: &Type) -> Option<PrimitiveType> {
                 if let Type::Primitive(PrimitiveType::Array(inner_typ)) = typ {
-                    return Self::is_flattenable_node(&*inner_typ);
+                    return Self::flattenable_typ(&*inner_typ);
                 }
-                return false;
+                if let Type::Primitive(inner) = typ {
+                    return Some(inner.clone());
+                }
+                return None;
             }
 
             fn generate_un_op(un_op: &UnaryOp) -> String {
@@ -424,13 +423,13 @@ pub mod rs {
                 }
             }
 
-            fn generate_punctuated_expr(punct: &Punctuated<Expr, Comma>) -> String {
+            fn generate_punctuated_expr(punct: &Punctuated<Expr, Comma>, in_attr: bool) -> String {
                 let mut str = String::new();
-                let e = Self::generate_expr(&punct.expr, false);
+                let e = Self::generate_expr(&punct.expr, false, in_attr);
                 str.push_str(&e);
                 let mut other = &punct.other;
                 while let Some((_, o)) = other {
-                    let e = Self::generate_expr(&o.expr, false);
+                    let e = Self::generate_expr(&o.expr, false, in_attr);
                     str.push_str(",");
                     str.push_str(&e);
                     other = &o.other
@@ -438,15 +437,15 @@ pub mod rs {
                 str
             }
 
-            fn generate_if(expr: &If, as_ref: bool) -> String {
+            fn generate_if(expr: &If, as_ref: bool, in_attr: bool) -> String {
                 let mut str = String::new();
-                let condition = Self::generate_expr(&expr.condition, false);
-                let if_inner = Self::generate_expr(&expr.then_branch.expr, as_ref);
-                let else_inner = Self::generate_expr(&expr.else_branch.1.expr, as_ref);
+                let condition = Self::generate_expr(&expr.condition, false, in_attr);
+                let if_inner = Self::generate_expr(&expr.then_branch.expr, as_ref, in_attr);
+                let else_inner = Self::generate_expr(&expr.else_branch.1.expr, as_ref, in_attr);
                 let mut else_ifs = String::new();
                 for (_, _, cond, block) in &expr.elseif_branches {
-                    let condition = Self::generate_expr(&cond, false);
-                    let if_inner = Self::generate_expr(&block.expr, as_ref);
+                    let condition = Self::generate_expr(&cond, false, in_attr);
+                    let if_inner = Self::generate_expr(&block.expr, as_ref, in_attr);
                     else_ifs.push_str(&format!("else if {} {{{}}}", condition, if_inner));
                 }
                 str.push_str(&format!(
@@ -456,10 +455,10 @@ pub mod rs {
                 str
             }
 
-            fn generate_for(expr: &For) -> String {
+            fn generate_for(expr: &For, in_attr: bool) -> String {
                 let binding = Self::generate_var(&expr.binding, false);
-                let arr = Self::generate_expr(&expr.expr, false);
-                let inner = Self::generate_expr(&expr.block.expr, true);
+                let arr = Self::generate_expr(&expr.expr, false, in_attr);
+                let inner = Self::generate_expr(&expr.block.expr, true, in_attr);
                 assert!(expr.expr.typ().is_array());
                 format!(
                     "({}).iter().map(|{}| {{{}}}).collect::<Vec<_>>()",
@@ -467,8 +466,8 @@ pub mod rs {
                 )
             }
 
-            fn generate_un_ap(expr: &UnaryAp) -> String {
-                let e = Self::generate_expr(&expr.right, false);
+            fn generate_un_ap(expr: &UnaryAp, in_attr: bool) -> String {
+                let e = Self::generate_expr(&expr.right, false, in_attr);
                 let op = Self::generate_un_op(&expr.op);
                 format!("{}({})", op, e)
             }
@@ -492,60 +491,64 @@ pub mod rs {
                 Self::wrap_ref(res, as_ref)
             }
 
-            fn generate_group_expr(expr: &Group<Expr>, as_ref: bool) -> String {
-                let inner = Self::generate_expr(&expr.expr, as_ref);
+            fn generate_group_expr(expr: &Group<Expr>, as_ref: bool, in_attr: bool) -> String {
+                let inner = Self::generate_expr(&expr.expr, as_ref, in_attr);
                 format!("({})", inner)
             }
 
-            fn generate_bin_ap(expr: &BinaryAp, as_ref: bool) -> String {
-                let left = Self::generate_expr(&expr.left, false);
+            fn generate_bin_ap(expr: &BinaryAp, as_ref: bool, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.left, false, in_attr);
                 let op = Self::generate_bin_op(&expr.right.op);
-                let right = Self::generate_expr(&expr.right.right, false);
+                let right = Self::generate_expr(&expr.right.right, false, in_attr);
                 Self::wrap_ref(format!("({} {} {})", left, op, right), as_ref)
             }
 
-            fn generate_sel_ap(expr: &SelectorAp, as_ref: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, false);
+            fn generate_sel_ap(expr: &SelectorAp, as_ref: bool, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.expr, false, in_attr);
                 let right = match &expr.right.selector {
                     SelectorOp::Named(named) => format!(".{}", named.name.text.span.value()),
                     SelectorOp::Bracket(bracket) => {
-                        let inner = Self::generate_expr(&bracket.expr, false);
+                        let inner = Self::generate_expr(&bracket.expr, false, in_attr);
                         format!("{}[0]", inner)
                     }
                 };
                 Self::wrap_ref(format!("({}){}", left, right), as_ref)
             }
-            fn generate_ap(expr: &Ap, as_ref: bool) -> String {
-                let left = Self::generate_expr(&expr.expr, false);
-                let args = Self::generate_punctuated_expr(&expr.right.group.expr);
+            fn generate_ap(expr: &Ap, as_ref: bool, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.expr, false, in_attr);
+                let args = Self::generate_punctuated_expr(&expr.right.group.expr, in_attr);
                 Self::wrap_ref(format!("({})({})", left, args), as_ref)
             }
             fn generate_empty(_: &Empty) -> String {
                 "()".to_string()
             }
 
-            fn generate_expr(expr: &Expr, as_ref: bool) -> String {
+            fn generate_expr(expr: &Expr, as_ref: bool, in_attr: bool) -> String {
                 match expr {
-                    Expr::If(if0) => Self::generate_if(if0, as_ref),
-                    Expr::For(for0) => Self::generate_for(for0),
-                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap),
+                    Expr::If(if0) => Self::generate_if(if0, as_ref, in_attr),
+                    Expr::For(for0) => Self::generate_for(for0, in_attr),
+                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap, in_attr),
                     Expr::Lit(lit) => Self::generate_lit(lit),
                     Expr::Var(var) => Self::generate_var(var, as_ref),
-                    Expr::Node(node) => Self::generate_node(node),
+                    Expr::Node(node) => Self::generate_node(node, in_attr),
                     Expr::Empty(empty) => Self::generate_empty(empty),
-                    Expr::Group(group) => Self::generate_group_expr(group, as_ref),
-                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap, as_ref),
-                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap, as_ref),
-                    Expr::Ap(ap) => Self::generate_ap(ap, as_ref),
+                    Expr::Group(group) => Self::generate_group_expr(group, as_ref, in_attr),
+                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap, as_ref, in_attr),
+                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap, as_ref, in_attr),
+                    Expr::Ap(ap) => Self::generate_ap(ap, as_ref, in_attr),
                 }
             }
 
             fn generate_attribute(attr: &Attribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
-                    AttributeValue::Block(block) => Self::generate_expr(&block.expr, true),
+                    AttributeValue::Block(block) => Self::generate_expr(&block.expr, false, true),
                 };
-                format!("(\"{}\".to_string(), Box::new(|| {{ Box::new({}) as AttributeValue<'props> }}) as AttributeFn<'props>)", attr.name.text.span.value(), value)
+                format!(
+                    "(\"{}\".to_string(), C::attr({}))",
+                    attr.name.text.span.value(),
+                    value
+                )
             }
 
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
@@ -557,7 +560,7 @@ pub mod rs {
                 format!("HashMap::from([{}])", inner)
             }
 
-            fn generate_tag(tag: &TagNode) -> String {
+            fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
                 let node = match &tag.block {
@@ -569,49 +572,64 @@ pub mod rs {
                                 NodeOrBlock::Node(_) => &Type::NODE,
                                 NodeOrBlock::Block(b) => b.expr.typ(),
                             };
-                            let mut e = Self::generate_node_or_block(&child, false);
-                            if !Self::is_flattenable_node(typ) {
-                                e = format!("(config.text)(&({}).render())", e);
+                            let mut e = Self::generate_node_or_block(&child, true, in_attr);
+                            let flattenable = Self::flattenable_typ(typ);
+                            if let Some(PrimitiveType::Node) = &flattenable {
+                                e = format!("({}).flatten()", e);
+                            } else {
+                                e = format!("C::text({}, {})", e, in_attr);
                             }
-                            children.push(format!("Box::new(|| {{ Box::new({}) as ChildValue<'props, NODE> }}) as ChildFn<'props, NODE>", e));
+                            children.push(format!("{}", e));
                             i += 1;
                         }
+                        let flatten = if children.is_empty() {
+                            ""
+                        } else {
+                            ".flatten()"
+                        };
                         format!(
-                            "(config.el)(\"{}\", {}, vec![{}])",
+                            "C::el(\"{}\", || {}, || vec![{}]{}, {})",
                             tag_name,
                             attrs,
-                            children.join(",\n")
+                            children.join(",\n"),
+                            flatten,
+                            in_attr
                         )
                     }
                     None => {
-                        format!("(config.el)(\"{}\", {})", tag_name, attrs)
+                        format!("C::el(\"{}\", {})", tag_name, attrs)
                     }
                 };
                 node
             }
 
-            pub fn generate_text_node(text: &TextNode) -> String {
+            pub fn generate_text_node(text: &TextNode, in_attr: bool) -> String {
                 format!(
-                    "(config.text)(\"{}\")",
-                    Self::escape(text.text.span.value())
+                    "C::text(\"{}\", {})",
+                    Self::escape(text.text.span.value()),
+                    in_attr
                 )
             }
 
-            pub fn generate_node(node: &Node) -> String {
+            pub fn generate_node(node: &Node, in_attr: bool) -> String {
                 match node {
-                    Node::Text(text) => Self::generate_text_node(text),
-                    Node::Tag(tag) => Self::generate_tag(tag),
+                    Node::Text(text) => Self::generate_text_node(text, in_attr),
+                    Node::Tag(tag) => Self::generate_tag(tag, in_attr),
                 }
             }
 
-            pub fn generate_block(nob: &Block, as_ref: bool) -> String {
-                Self::generate_expr(&nob.expr, as_ref)
+            pub fn generate_block(nob: &Block, as_ref: bool, in_attr: bool) -> String {
+                Self::generate_expr(&nob.expr, as_ref, in_attr)
             }
 
-            pub fn generate_node_or_block(nob: &NodeOrBlock, as_ref: bool) -> String {
+            pub fn generate_node_or_block(
+                nob: &NodeOrBlock,
+                as_ref: bool,
+                in_attr: bool,
+            ) -> String {
                 match nob {
-                    NodeOrBlock::Node(node) => Self::generate_node(node),
-                    NodeOrBlock::Block(block) => Self::generate_block(block, as_ref),
+                    NodeOrBlock::Node(node) => Self::generate_node(node, in_attr),
+                    NodeOrBlock::Block(block) => Self::generate_block(block, as_ref, in_attr),
                 }
             }
 
@@ -684,14 +702,11 @@ pub mod rs {
                 );
                 let generics_def_str = generics.type_var_def_str();
                 let generics_str = generics.type_var_str();
-                let props_type = format!(
-                    "pub type Props<{}> = {};",
-                    &generics_def_str, props_type_str
-                );
-                str.push_str(&format!("use rex::{{Config, ChildFn, AttributeFn, ChildValue, AttributeValue}}; use structx::*; {} pub fn render<'props, {}, NODE: Node>(props: &'props Props<{}>, config: &'props Config<NODE>) -> impl Flatten<Node=NODE> {{", props_type, &generics_def_str, &generics_str));
+                let props_type = format!("pub type Props<{}> = {};", &generics_str, props_type_str);
+                str.push_str(&format!("use rex::{{Config, ChildFn, AttributeFn, ChildValue, AttributeValue}}; use structx::*; {} pub fn render<{}, C: Config>(props: &Props<{}>) -> Vec<C::Node> {{", props_type, &generics_def_str, &generics_str));
                 match &view.root {
                     None => {}
-                    Some(nob) => str.push_str(&Self::generate_node_or_block(&nob, false)),
+                    Some(nob) => str.push_str(&Self::generate_node_or_block(&nob, false, false)),
                 }
                 str.push_str("}");
                 str

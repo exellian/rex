@@ -1539,9 +1539,6 @@ pub mod parse {
     }
 
     pub mod scope {
-        use crate::rex::parse::{AttributeValue, Expr, Node, NodeOrBlock, SelectorOp, Var};
-        use crate::View;
-        use std::collections::HashSet;
 
         #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
         pub enum Scope {

@@ -1,9 +1,7 @@
-<test name={ <div></div> }>
+<div>
     {
         for product in products {
-            for product1 in products {
-                product1.name
-            }
+            <div>{product.name}</div>
         }
     }
-</test>
+</div>

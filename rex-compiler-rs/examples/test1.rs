@@ -10,7 +10,6 @@ fn main() {
 
     let parser = parser::Parser::new(lexer);
     let (_, view) = parser.parse::<View>().unwrap();
-    //println!("{:#?}", view);
 
     let rs = RsCodegen::new();
     let res = rs.generate(&view);
