@@ -17,35 +17,27 @@ Momentaner Fokus ist die Fertigstellung der Templatingsprache:
 ```
 wird zu folgendem Rust-Code transpiled:
 ```rust
-use rex::{AttributeFn, AttributeValue, ChildFn, ChildValue, Config};
-use structx::*;
-pub type Props<T: Render> = Structx! { 
-    products: Vec<Structx!{ name: T }> 
-};
-pub fn render<'props, T: Render, NODE: Node>(
-    props: &'props Props<T>,
-    config: &'props Config<NODE>,
-) -> impl Flatten<Node = NODE> {
-    (config.el)(
+pub type Props<T> = Structx! { products: Vec<Structx!{ name: T }> };
+pub fn render<T: Render, C: Config>(props: &Props<T>) -> Vec<C::Node> {
+    C::el(
         "div",
-        HashMap::from([]),
-        vec![Box::new(|| {
-            Box::new(
-                (props.products)
-                    .iter()
-                    .map(|product| {
-                        (config.el)(
-                            "div",
-                            HashMap::from([]),
-                            vec![Box::new(|| {
-                                Box::new((config.text)(&((product).name).render()))
-                                    as ChildValue<'props, NODE>
-                            }) as ChildFn<'props, NODE>],
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            ) as ChildValue<'props, NODE>
-        }) as ChildFn<'props, NODE>],
+        || HashMap::from([]),
+        || {
+            vec![((props.products)
+                .iter()
+                .map(|product| {
+                    C::el(
+                        "div",
+                        || HashMap::from([]),
+                        || vec![C::text(&(product).name, false)].flatten(),
+                        false,
+                    )
+                })
+                .collect::<Vec<_>>())
+            .flatten()]
+            .flatten()
+        },
+        false,
     )
 }
 ```
