@@ -8,8 +8,9 @@ pub mod js {
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::Type;
         use crate::rex::parse::{
-            Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node,
-            NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, UnaryAp, UnaryOp, Var,
+            Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If,
+            KeyValueAttribute, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode,
+            UnaryAp, UnaryOp, Var,
         };
         use crate::View;
         use std::collections::HashSet;
@@ -163,7 +164,7 @@ pub mod js {
                 }
             }
 
-            fn generate_attribute(attr: &Attribute) -> String {
+            fn generate_attribute(attr: &KeyValueAttribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
                     AttributeValue::Block(block) => Self::generate_expr(&block.expr),
@@ -174,6 +175,14 @@ pub mod js {
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
                 let inner = attrs
                     .iter()
+                    .filter(|attr| match attr {
+                        Attribute::Ref(_) => false,
+                        Attribute::KeyValue(_) => true,
+                    })
+                    .map(|attr| match attr {
+                        Attribute::Ref(_) => unreachable!(),
+                        Attribute::KeyValue(kva) => kva,
+                    })
                     .map(|attr| Self::generate_attribute(attr))
                     .collect::<Vec<String>>()
                     .join(",");
@@ -261,9 +270,9 @@ pub mod rs {
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::{AbstractType, PrimitiveType, Type};
         use crate::rex::parse::{
-            Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, Node,
-            NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode, TextNode, UnaryAp, UnaryOp,
-            Var,
+            Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If,
+            KeyValueAttribute, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode,
+            TextNode, UnaryAp, UnaryOp, Var,
         };
         use crate::rex::View;
         use crate::util::HashMultimap;
@@ -539,7 +548,7 @@ pub mod rs {
                 }
             }
 
-            fn generate_attribute(attr: &Attribute) -> String {
+            fn generate_attribute(attr: &KeyValueAttribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
                     AttributeValue::Block(block) => Self::generate_expr(&block.expr, false, true),
@@ -554,6 +563,14 @@ pub mod rs {
             fn generate_attributes(attrs: &Vec<Attribute>) -> String {
                 let inner = attrs
                     .iter()
+                    .filter(|attr| match attr {
+                        Attribute::Ref(_) => false,
+                        Attribute::KeyValue(_) => true,
+                    })
+                    .map(|attr| match attr {
+                        Attribute::Ref(_) => unreachable!(),
+                        Attribute::KeyValue(kva) => kva,
+                    })
                     .map(|attr| Self::generate_attribute(attr))
                     .collect::<Vec<String>>()
                     .join(",");

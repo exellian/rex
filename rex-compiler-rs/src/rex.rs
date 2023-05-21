@@ -225,6 +225,7 @@ pub mod lex {
             pub const CR: char = '\u{000d}';
             pub const SPACE: char = '\u{0020}';
             pub const DOT: char = '.';
+            pub const HASH_TAG: char = '#';
             pub const COMMA: char = ',';
             pub const PLUS: char = '+';
             pub const MINUS: char = '-';
@@ -272,6 +273,7 @@ pub mod lex {
             fn is_punct(ch: char) -> bool {
                 ch == Self::COMMA
                     || ch == Self::DOT
+                    || ch == Self::HASH_TAG
                     || ch == Self::PLUS
                     || ch == Self::MINUS
                     || ch == Self::MUL
@@ -351,6 +353,7 @@ pub mod lex {
                     Self::CR | /* CR */
                     Self::SPACE /* SPACE */ =>
                         LexerContext::Whitespace,
+                    Self::HASH_TAG |
                     Self::COMMA |
                     Self::PLUS |
                     Self::MINUS |
@@ -692,7 +695,10 @@ pub mod parse {
             pub text: Text<'a>,
             pub value: bool,
         }
-
+        #[derive(Debug)]
+        pub struct HashTag<'a> {
+            pub punct: Punct<'a>,
+        }
         #[derive(Debug)]
         pub struct Empty<'a> {
             _a: PhantomData<&'a ()>,
@@ -705,9 +711,9 @@ pub mod parse {
             use crate::rex::lex::Lexer;
             use crate::rex::parse::primitive::{
                 Add, And, AndAnd, Bang, BraceLeft, BraceRight, BracketLeft, BracketRight, Comma,
-                Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, Ident, If, In, Le, Lit, LitBool,
-                LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Or, OrOr, ParenLeft, ParenRight, Sub,
-                Xor,
+                Div, Dot, Else, Empty, Eq, EqEq, For, Ge, Gt, HashTag, Ident, If, In, Le, Lit,
+                LitBool, LitFloat, LitInt, LitStr, Lt, Mod, Mul, Ne, Or, OrOr, ParenLeft,
+                ParenRight, Sub, Xor,
             };
             use crate::rex::parse::Error;
             use std::marker::PhantomData;
@@ -1330,6 +1336,22 @@ pub mod parse {
                 }
             }
 
+            impl<'a> Parse for HashTag<'a> {
+                type Error = Error;
+                type Token = Result<lex::Token<'a>, lex::Error>;
+
+                fn parse<C: Cursor<Item = Self::Token>>(
+                    parser: Parser<C>,
+                ) -> Result<(Parser<C>, Self), Self::Error> {
+                    let (parser, punct) = parser.parse_token::<lex::Punct>()?;
+                    return if punct.ch == Lexer::HASH_TAG {
+                        Ok((parser, HashTag { punct }))
+                    } else {
+                        Err(Error::UnexpectedToken(punct.span.owned()))
+                    };
+                }
+            }
+
             impl<'a> Parse for Empty<'a> {
                 type Error = Error;
                 type Token = Result<lex::Token<'a>, lex::Error>;
@@ -1379,7 +1401,22 @@ pub mod parse {
         pub gt: primitive::Gt<'a>,
     }
     #[derive(Debug)]
-    pub struct Attribute<'a> {
+    pub enum Attribute<'a> {
+        Ref(RefAttribute<'a>),
+        KeyValue(KeyValueAttribute<'a>),
+    }
+    #[derive(Debug)]
+    pub struct RefAttribute<'a> {
+        pub hash_tag: primitive::HashTag<'a>,
+        pub name: primitive::Ident<'a>,
+        pub param: Option<(
+            primitive::BraceLeft<'a>,
+            Box<Expr<'a>>,
+            primitive::BraceRight<'a>,
+        )>,
+    }
+    #[derive(Debug)]
+    pub struct KeyValueAttribute<'a> {
         pub name: primitive::Ident<'a>,
         pub eq: primitive::Eq<'a>,
         pub value: AttributeValue<'a>,
@@ -1551,9 +1588,9 @@ pub mod parse {
         use crate::rex::parse::primitive::{Comma, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::{
-            primitive, Ap, ApRight, AttributeValue, BinaryAp, BinaryApRight, BinaryOp, Block,
-            Error, Expr, For, If, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorApRight,
-            SelectorOp, UnaryAp, UnaryOp, Var,
+            primitive, Ap, ApRight, Attribute, AttributeValue, BinaryAp, BinaryApRight, BinaryOp,
+            Block, Error, Expr, For, If, Node, NodeOrBlock, Punctuated, SelectorAp,
+            SelectorApRight, SelectorOp, UnaryAp, UnaryOp, Var,
         };
         use crate::rex::View;
         use crate::util::HashMultimap;
@@ -2540,11 +2577,18 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut res = HashMultimap::new();
                         for attr in &mut tag.attributes {
-                            match &mut attr.value {
-                                AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(block) => {
-                                    res.extend(block.expr.globals_mut());
+                            match attr {
+                                Attribute::Ref(ra) => {
+                                    if let Some((_, param, _)) = &mut ra.param {
+                                        res.extend(param.globals_mut());
+                                    }
                                 }
+                                Attribute::KeyValue(kva) => match &mut kva.value {
+                                    AttributeValue::StrLit(_) => {}
+                                    AttributeValue::Block(block) => {
+                                        res.extend(block.expr.globals_mut());
+                                    }
+                                },
                             }
                         }
                         if let Some(block) = &mut tag.block {
@@ -2571,11 +2615,18 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut res = HashMultimap::new();
                         for attr in &tag.attributes {
-                            match &attr.value {
-                                AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(block) => {
-                                    res.extend(block.expr.globals());
+                            match attr {
+                                Attribute::Ref(ra) => {
+                                    if let Some((_, expr, _)) = &ra.param {
+                                        res.extend(expr.globals());
+                                    }
                                 }
+                                Attribute::KeyValue(kva) => match &kva.value {
+                                    AttributeValue::StrLit(_) => {}
+                                    AttributeValue::Block(block) => {
+                                        res.extend(block.expr.globals());
+                                    }
+                                },
                             }
                         }
                         if let Some(block) = &tag.block {
@@ -2604,11 +2655,18 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut vars = vec![];
                         for attr in &mut tag.attributes {
-                            match &mut attr.value {
-                                AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(b) => {
-                                    vars.push(b.expr.find_var_typ_and_infer(var_name)?);
+                            match attr {
+                                Attribute::Ref(ra) => {
+                                    if let Some((_, expr, _)) = &mut ra.param {
+                                        vars.push(expr.find_var_typ_and_infer(var_name)?);
+                                    }
                                 }
+                                Attribute::KeyValue(kva) => match &mut kva.value {
+                                    AttributeValue::StrLit(_) => {}
+                                    AttributeValue::Block(b) => {
+                                        vars.push(b.expr.find_var_typ_and_infer(var_name)?);
+                                    }
+                                },
                             }
                         }
                         if let Some(tag_block) = &mut tag.block {
@@ -3068,9 +3126,18 @@ pub mod parse {
                     Node::Text(_) => {}
                     Node::Tag(tag) => {
                         for attr in &mut tag.attributes {
-                            match &mut attr.value {
-                                AttributeValue::StrLit(_) => {}
-                                AttributeValue::Block(block) => block.expr.infer_scope(var, scope),
+                            match attr {
+                                Attribute::Ref(ra) => {
+                                    if let Some((_, expr, _)) = &mut ra.param {
+                                        expr.infer_scope(var, scope);
+                                    }
+                                }
+                                Attribute::KeyValue(kva) => match &mut kva.value {
+                                    AttributeValue::StrLit(_) => {}
+                                    AttributeValue::Block(block) => {
+                                        block.expr.infer_scope(var, scope)
+                                    }
+                                },
                             }
                         }
                         match &mut tag.block {
@@ -3170,9 +3237,9 @@ pub mod parse {
         use crate::rex::parse::typ::{Type, Typed};
         use crate::rex::parse::{
             primitive, ApRight, Attribute, AttributeValue, BinaryApRight, BinaryOp, Block,
-            BracketSelector, Error, Expr, For, Group, If, NamedSelector, Node, NodeOrBlock,
-            Punctuated, PunctuatedIter, PunctuatedIterMut, SelectorAp, SelectorApRight, SelectorOp,
-            TagBlock, TagNode, TextNode, UnaryAp, UnaryOp, Var, View,
+            BracketSelector, Error, Expr, For, Group, If, KeyValueAttribute, NamedSelector, Node,
+            NodeOrBlock, Punctuated, PunctuatedIter, PunctuatedIterMut, RefAttribute,
+            SelectorApRight, SelectorOp, TagBlock, TagNode, TextNode, UnaryAp, UnaryOp, Var, View,
         };
 
         impl From<lex::Error> for Error {
@@ -3372,12 +3439,59 @@ pub mod parse {
             fn parse<C: Cursor<Item = Self::Token>>(
                 parser: Parser<C>,
             ) -> Result<(Parser<C>, Self), Self::Error> {
+                let (parser, ref_attribute) = parser.opt_parse::<RefAttribute>();
+                match ref_attribute {
+                    Some(ref_attribute) => Ok((parser, Attribute::Ref(ref_attribute))),
+                    None => {
+                        let (parser, key_val_attribute) = parser.parse::<KeyValueAttribute>()?;
+                        Ok((parser, Attribute::KeyValue(key_val_attribute)))
+                    }
+                }
+            }
+        }
+
+        impl<'a> Parse for RefAttribute<'a> {
+            type Error = Error;
+            type Token = Result<lex::Token<'a>, lex::Error>;
+
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
+                let (parser, hash_tag) = parser.parse::<primitive::HashTag>()?;
+                let (parser, name) = parser.parse::<primitive::Ident>()?;
+                let (parser, left) = parser.opt_parse::<primitive::BraceLeft>();
+                let (parser, param) = match left {
+                    None => (parser, None),
+                    Some(left) => {
+                        let (parser, expr) = parser.parse::<Expr>()?;
+                        let (parser, right) = parser.parse::<primitive::BraceRight>()?;
+                        (parser, Some((left, Box::new(expr), right)))
+                    }
+                };
+                Ok((
+                    parser,
+                    RefAttribute {
+                        hash_tag,
+                        name,
+                        param,
+                    },
+                ))
+            }
+        }
+
+        impl<'a> Parse for KeyValueAttribute<'a> {
+            type Error = Error;
+            type Token = Result<lex::Token<'a>, lex::Error>;
+
+            fn parse<C: Cursor<Item = Self::Token>>(
+                parser: Parser<C>,
+            ) -> Result<(Parser<C>, Self), Self::Error> {
                 let (parser, name) = parser.parse::<primitive::Ident>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, eq) = parser.parse::<primitive::Eq>()?;
                 let (parser, _) = parser.opt_parse_token::<lex::Whitespace>();
                 let (parser, value) = parser.parse::<AttributeValue>()?;
-                Ok((parser, Attribute { name, eq, value }))
+                Ok((parser, KeyValueAttribute { name, eq, value }))
             }
         }
 
