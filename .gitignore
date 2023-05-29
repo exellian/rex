@@ -1,6 +1,7 @@
 target
 rex-compiler-ts/target
 rex-compiler-ts/Cargo.lock
+rex-compiler-ts/yarn.lock
 rex-compiler-ts/package-lock.json
 rex-compiler-rs/target
 rex-compiler-rs/Cargo.lock
