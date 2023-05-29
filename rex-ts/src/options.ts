@@ -1,5 +1,5 @@
-import { Config } from "./index";
+import {Config, View} from "./index";
 
 export interface IOptions {
-    view: string
+    view: View
 }

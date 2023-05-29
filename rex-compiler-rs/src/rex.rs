@@ -532,6 +532,7 @@ pub mod parse {
         UnexpectedEof,
         TypeError(Type, Type),
         UnsupportedOperation,
+        DuplicateRef,
         DuplicateVar(String),
     }
 
@@ -1387,7 +1388,8 @@ pub mod parse {
     pub struct TagNode<'a> {
         pub lt: primitive::Lt<'a>,
         pub name: primitive::Ident<'a>,
-        pub attributes: Vec<Attribute<'a>>,
+        pub attributes: Vec<KeyValueAttribute<'a>>,
+        pub ref_attribute: Option<RefAttribute<'a>>,
         pub div: Option<primitive::Div<'a>>,
         pub gt: primitive::Gt<'a>,
         pub block: Option<TagBlock<'a>>,
@@ -2577,18 +2579,16 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut res = HashMultimap::new();
                         for attr in &mut tag.attributes {
-                            match attr {
-                                Attribute::Ref(ra) => {
-                                    if let Some((_, param, _)) = &mut ra.param {
-                                        res.extend(param.globals_mut());
-                                    }
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => {
+                                    res.extend(block.expr.globals_mut());
                                 }
-                                Attribute::KeyValue(kva) => match &mut kva.value {
-                                    AttributeValue::StrLit(_) => {}
-                                    AttributeValue::Block(block) => {
-                                        res.extend(block.expr.globals_mut());
-                                    }
-                                },
+                            }
+                        }
+                        if let Some(ra) = &mut tag.ref_attribute {
+                            if let Some((_, expr, _)) = &mut ra.param {
+                                res.extend(expr.globals_mut());
                             }
                         }
                         if let Some(block) = &mut tag.block {
@@ -2615,18 +2615,16 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut res = HashMultimap::new();
                         for attr in &tag.attributes {
-                            match attr {
-                                Attribute::Ref(ra) => {
-                                    if let Some((_, expr, _)) = &ra.param {
-                                        res.extend(expr.globals());
-                                    }
+                            match &attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => {
+                                    res.extend(block.expr.globals());
                                 }
-                                Attribute::KeyValue(kva) => match &kva.value {
-                                    AttributeValue::StrLit(_) => {}
-                                    AttributeValue::Block(block) => {
-                                        res.extend(block.expr.globals());
-                                    }
-                                },
+                            }
+                        }
+                        if let Some(ra) = &tag.ref_attribute {
+                            if let Some((_, expr, _)) = &ra.param {
+                                res.extend(expr.globals());
                             }
                         }
                         if let Some(block) = &tag.block {
@@ -2655,18 +2653,16 @@ pub mod parse {
                     Node::Tag(tag) => {
                         let mut vars = vec![];
                         for attr in &mut tag.attributes {
-                            match attr {
-                                Attribute::Ref(ra) => {
-                                    if let Some((_, expr, _)) = &mut ra.param {
-                                        vars.push(expr.find_var_typ_and_infer(var_name)?);
-                                    }
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(b) => {
+                                    vars.push(b.expr.find_var_typ_and_infer(var_name)?);
                                 }
-                                Attribute::KeyValue(kva) => match &mut kva.value {
-                                    AttributeValue::StrLit(_) => {}
-                                    AttributeValue::Block(b) => {
-                                        vars.push(b.expr.find_var_typ_and_infer(var_name)?);
-                                    }
-                                },
+                            }
+                        }
+                        if let Some(ra) = &mut tag.ref_attribute {
+                            if let Some((_, expr, _)) = &mut ra.param {
+                                vars.push(expr.find_var_typ_and_infer(var_name)?);
                             }
                         }
                         if let Some(tag_block) = &mut tag.block {
@@ -3126,18 +3122,14 @@ pub mod parse {
                     Node::Text(_) => {}
                     Node::Tag(tag) => {
                         for attr in &mut tag.attributes {
-                            match attr {
-                                Attribute::Ref(ra) => {
-                                    if let Some((_, expr, _)) = &mut ra.param {
-                                        expr.infer_scope(var, scope);
-                                    }
-                                }
-                                Attribute::KeyValue(kva) => match &mut kva.value {
-                                    AttributeValue::StrLit(_) => {}
-                                    AttributeValue::Block(block) => {
-                                        block.expr.infer_scope(var, scope)
-                                    }
-                                },
+                            match &mut attr.value {
+                                AttributeValue::StrLit(_) => {}
+                                AttributeValue::Block(block) => block.expr.infer_scope(var, scope),
+                            }
+                        }
+                        if let Some(ra) = &mut tag.ref_attribute {
+                            if let Some((_, expr, _)) = &mut ra.param {
+                                expr.infer_scope(var, scope);
                             }
                         }
                         match &mut tag.block {
@@ -3364,13 +3356,24 @@ pub mod parse {
                 let (parser, lt) = parser.parse::<primitive::Lt>()?;
                 let (mut parser, name) = parser.parse::<primitive::Ident>()?;
                 let mut attributes1 = Vec::new();
+                let mut ref_attribute = None;
                 let (parser, attributes) = loop {
                     let (parser1, _) = parser.opt_parse_token::<lex::Whitespace>();
                     let (parser1, attribute) = parser1.opt_parse::<Attribute>();
                     match attribute {
                         Some(attr) => {
-                            attributes1.push(attr);
-                            parser = parser1
+                            match attr {
+                                Attribute::Ref(ra) => {
+                                    if let Some(_) = ref_attribute {
+                                        return Err(Error::DuplicateRef);
+                                    }
+                                    ref_attribute = Some(ra);
+                                }
+                                Attribute::KeyValue(kva) => {
+                                    attributes1.push(kva);
+                                }
+                            }
+                            parser = parser1;
                         }
                         None => break (parser1, attributes1),
                     }
@@ -3386,6 +3389,7 @@ pub mod parse {
                         lt,
                         name,
                         attributes,
+                        ref_attribute,
                         div,
                         gt,
                         block,

@@ -4,16 +4,14 @@ pub mod js {
 
     mod implementation {
         use crate::codegen::js::JsCodegen;
-        use crate::rex::parse::primitive::{Comma, Empty, Lit};
+        use crate::rex::parse::primitive::{BraceLeft, BraceRight, Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
-        use crate::rex::parse::typ::Type;
         use crate::rex::parse::{
-            Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If,
-            KeyValueAttribute, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode,
-            UnaryAp, UnaryOp, Var,
+            Ap, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If, KeyValueAttribute,
+            Node, NodeOrBlock, Punctuated, RefAttribute, SelectorAp, SelectorOp, TagNode, UnaryAp,
+            UnaryOp, Var,
         };
         use crate::View;
-        use std::collections::HashSet;
 
         impl JsCodegen {
             pub fn new() -> Self {
@@ -52,13 +50,16 @@ pub mod js {
                 }
             }
 
-            fn generate_punctuated_expr(mut punct: &Punctuated<Expr, Comma>) -> String {
+            fn generate_punctuated_expr(
+                mut punct: &Punctuated<Expr, Comma>,
+                in_attr: bool,
+            ) -> String {
                 let mut str = String::new();
-                let e = Self::generate_expr(&punct.expr);
+                let e = Self::generate_expr(&punct.expr, in_attr);
                 str.push_str(&e);
                 let mut other = &punct.other;
                 while let Some((_, o)) = other {
-                    let e = Self::generate_expr(&o.expr);
+                    let e = Self::generate_expr(&o.expr, in_attr);
                     str.push_str(",");
                     str.push_str(&e);
                     other = &o.other
@@ -66,16 +67,16 @@ pub mod js {
                 str
             }
 
-            fn generate_if(expr: &If) -> String {
+            fn generate_if(expr: &If, in_attr: bool) -> String {
                 let mut str = String::new();
                 let mut inner = String::new();
-                let mut condition = Self::generate_expr(&expr.condition);
-                let mut if_inner = Self::generate_expr(&expr.then_branch.expr);
-                let mut else_inner = Self::generate_expr(&expr.else_branch.1.expr);
+                let mut condition = Self::generate_expr(&expr.condition, in_attr);
+                let mut if_inner = Self::generate_expr(&expr.then_branch.expr, in_attr);
+                let mut else_inner = Self::generate_expr(&expr.else_branch.1.expr, in_attr);
                 let mut else_ifs = String::new();
                 for (_, _, cond, block) in &expr.elseif_branches {
-                    let mut condition = Self::generate_expr(&cond);
-                    let mut if_inner = Self::generate_expr(&block.expr);
+                    let mut condition = Self::generate_expr(&cond, in_attr);
+                    let mut if_inner = Self::generate_expr(&block.expr, in_attr);
                     else_ifs.push_str(&format!("else if ({}) {{return {};}}", condition, if_inner));
                 }
                 inner.push_str(&format!(
@@ -86,19 +87,19 @@ pub mod js {
                 str
             }
 
-            fn generate_for(expr: &For) -> String {
+            fn generate_for(expr: &For, in_attr: bool) -> String {
                 let mut str = String::new();
                 let binding = Self::generate_var(&expr.binding);
-                let arr = Self::generate_expr(&expr.expr);
-                let inner = Self::generate_expr(&expr.block.expr);
+                let arr = Self::generate_expr(&expr.expr, in_attr);
+                let inner = Self::generate_expr(&expr.block.expr, in_attr);
                 str.push_str(&format!(
                     "({}).map(({}) => {{return {};}})",
                     arr, binding, inner
                 ));
                 str
             }
-            fn generate_un_ap(expr: &UnaryAp) -> String {
-                let e = Self::generate_expr(&expr.right);
+            fn generate_un_ap(expr: &UnaryAp, in_attr: bool) -> String {
+                let e = Self::generate_expr(&expr.right, in_attr);
                 let op = Self::generate_un_op(&expr.op);
                 format!("{}({})", op, e)
             }
@@ -118,97 +119,104 @@ pub mod js {
                 };
                 format!("{}{}", prefix, expr.name.text.span.value())
             }
-            fn generate_group_expr(expr: &Group<Expr>) -> String {
-                let inner = Self::generate_expr(&expr.expr);
+            fn generate_group_expr(expr: &Group<Expr>, in_attr: bool) -> String {
+                let inner = Self::generate_expr(&expr.expr, in_attr);
                 format!("({})", inner)
             }
-            fn generate_bin_ap(expr: &BinaryAp) -> String {
-                let left = Self::generate_expr(&expr.left);
+            fn generate_bin_ap(expr: &BinaryAp, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.left, in_attr);
                 let op = Self::generate_bin_op(&expr.right.op);
-                let right = Self::generate_expr(&expr.right.right);
+                let right = Self::generate_expr(&expr.right.right, in_attr);
                 format!("{} {} {}", left, op, right)
             }
-            fn generate_sel_ap(expr: &SelectorAp) -> String {
-                let left = Self::generate_expr(&expr.expr);
+            fn generate_sel_ap(expr: &SelectorAp, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.expr, in_attr);
                 let right = match &expr.right.selector {
                     SelectorOp::Named(named) => format!(".{}", named.name.text.span.value()),
                     SelectorOp::Bracket(bracket) => {
-                        let inner = Self::generate_expr(&bracket.expr);
+                        let inner = Self::generate_expr(&bracket.expr, in_attr);
                         format!("[{}]", inner)
                     }
                 };
                 format!("({}){}", left, right)
             }
-            fn generate_ap(expr: &Ap) -> String {
-                let left = Self::generate_expr(&expr.expr);
-                let args = Self::generate_punctuated_expr(&expr.right.group.expr);
+            fn generate_ap(expr: &Ap, in_attr: bool) -> String {
+                let left = Self::generate_expr(&expr.expr, in_attr);
+                let args = Self::generate_punctuated_expr(&expr.right.group.expr, in_attr);
                 format!("({})({})", left, args)
             }
             fn generate_empty(empty: &Empty) -> String {
                 "undefined".to_string()
             }
 
-            fn generate_expr(expr: &Expr) -> String {
+            fn generate_expr(expr: &Expr, in_attr: bool) -> String {
                 match expr {
-                    Expr::If(if0) => Self::generate_if(if0),
-                    Expr::For(for0) => Self::generate_for(for0),
-                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap),
+                    Expr::If(if0) => Self::generate_if(if0, in_attr),
+                    Expr::For(for0) => Self::generate_for(for0, in_attr),
+                    Expr::UnaryAp(un_ap) => Self::generate_un_ap(un_ap, in_attr),
                     Expr::Lit(lit) => Self::generate_lit(lit),
                     Expr::Var(var) => Self::generate_var(var),
-                    Expr::Node(node) => Self::generate_node(node),
+                    Expr::Node(node) => Self::generate_node(node, in_attr),
                     Expr::Empty(empty) => Self::generate_empty(empty),
-                    Expr::Group(group) => Self::generate_group_expr(group),
-                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap),
-                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap),
-                    Expr::Ap(ap) => Self::generate_ap(ap),
+                    Expr::Group(group) => Self::generate_group_expr(group, in_attr),
+                    Expr::BinaryAp(bin_ap) => Self::generate_bin_ap(bin_ap, in_attr),
+                    Expr::SelectorAp(sel_ap) => Self::generate_sel_ap(sel_ap, in_attr),
+                    Expr::Ap(ap) => Self::generate_ap(ap, in_attr),
                 }
             }
 
             fn generate_attribute(attr: &KeyValueAttribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
-                    AttributeValue::Block(block) => Self::generate_expr(&block.expr),
+                    AttributeValue::Block(block) => Self::generate_expr(&block.expr, true),
                 };
                 format!("{}: () => {}", attr.name.text.span.value(), value)
             }
 
-            fn generate_attributes(attrs: &Vec<Attribute>) -> String {
+            fn generate_attributes(attrs: &Vec<KeyValueAttribute>) -> String {
                 let inner = attrs
                     .iter()
-                    .filter(|attr| match attr {
-                        Attribute::Ref(_) => false,
-                        Attribute::KeyValue(_) => true,
-                    })
-                    .map(|attr| match attr {
-                        Attribute::Ref(_) => unreachable!(),
-                        Attribute::KeyValue(kva) => kva,
-                    })
                     .map(|attr| Self::generate_attribute(attr))
                     .collect::<Vec<String>>()
                     .join(",");
                 format!("{{{}}}", inner)
             }
 
-            fn generate_tag(tag: &TagNode) -> String {
+            fn generate_ref_attribute(id: &Option<RefAttribute>) -> String {
+                match id {
+                    None => "() => null".to_string(),
+                    Some(ra) => {
+                        let text = ra.name.text.span.value();
+                        match &ra.param {
+                            None => format!("() => [{}, null]", text),
+                            Some((_, expr, _)) => {
+                                format!("() => [{}, {}]", text, Self::generate_expr(expr, true))
+                            }
+                        }
+                    }
+                }
+            }
+
+            fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
+                let ref_attr = Self::generate_ref_attribute(&tag.ref_attribute);
                 let el_name = "el";
                 match &tag.block {
                     Some(tag_block) => {
-                        let mut children = String::new();
-                        let mut i = 0;
+                        let mut children = vec![];
                         for child in &tag_block.children {
-                            let e = Self::generate_node_or_block(&child);
-                            if i != 0 {
-                                children.push_str(",");
-                            }
-
-                            children.push_str(&format!("() => {}", e));
-                            i += 1;
+                            let e = Self::generate_node_or_block(&child, in_attr);
+                            children.push(format!("() => ([{}]).flat(Infinity)", e));
                         }
                         format!(
-                            "config.{}(`{}`, {}, [{}])",
-                            el_name, tag_name, attrs, children
+                            "config.{}(`{}`, {}, {}, [{}], {})",
+                            el_name,
+                            tag_name,
+                            attrs,
+                            ref_attr,
+                            children.join(","),
+                            in_attr
                         )
                     }
                     None => {
@@ -217,7 +225,7 @@ pub mod js {
                 }
             }
 
-            pub fn generate_node(nob: &Node) -> String {
+            pub fn generate_node(nob: &Node, in_attr: bool) -> String {
                 let text_name = "text";
                 match nob {
                     Node::Text(text) => {
@@ -229,18 +237,18 @@ pub mod js {
                         ));
                         str
                     }
-                    Node::Tag(tag) => Self::generate_tag(tag),
+                    Node::Tag(tag) => Self::generate_tag(tag, in_attr),
                 }
             }
 
-            pub fn generate_block(nob: &Block) -> String {
-                Self::generate_expr(&nob.expr)
+            pub fn generate_block(nob: &Block, in_attr: bool) -> String {
+                Self::generate_expr(&nob.expr, in_attr)
             }
 
-            pub fn generate_node_or_block(nob: &NodeOrBlock) -> String {
+            pub fn generate_node_or_block(nob: &NodeOrBlock, in_attr: bool) -> String {
                 match nob {
-                    NodeOrBlock::Node(node) => Self::generate_node(node),
-                    NodeOrBlock::Block(block) => Self::generate_block(block),
+                    NodeOrBlock::Node(node) => Self::generate_node(node, in_attr),
+                    NodeOrBlock::Block(block) => Self::generate_block(block, in_attr),
                 }
             }
 
@@ -251,7 +259,7 @@ pub mod js {
                 ));
                 match &view.root {
                     None => {}
-                    Some(nob) => str.push_str(&Self::generate_node_or_block(&nob)),
+                    Some(nob) => str.push_str(&Self::generate_node_or_block(&nob, false)),
                 }
                 str.push_str(";}}");
                 str
@@ -266,13 +274,13 @@ pub mod rs {
 
     mod implementation {
         use crate::codegen::rs::RsCodegen;
-        use crate::rex::parse::primitive::{Comma, Empty, Lit};
+        use crate::rex::parse::primitive::{BraceLeft, BraceRight, Comma, Empty, Lit};
         use crate::rex::parse::scope::Scope;
         use crate::rex::parse::typ::{AbstractType, PrimitiveType, Type};
         use crate::rex::parse::{
             Ap, Attribute, AttributeValue, BinaryAp, BinaryOp, Block, Expr, For, Group, If,
-            KeyValueAttribute, Node, NodeOrBlock, Punctuated, SelectorAp, SelectorOp, TagNode,
-            TextNode, UnaryAp, UnaryOp, Var,
+            KeyValueAttribute, Node, NodeOrBlock, Punctuated, RefAttribute, SelectorAp, SelectorOp,
+            TagNode, TextNode, UnaryAp, UnaryOp, Var,
         };
         use crate::rex::View;
         use crate::util::HashMultimap;
@@ -548,38 +556,48 @@ pub mod rs {
                 }
             }
 
+            fn generate_ref_attribute(attr: &Option<RefAttribute>) -> String {
+                match attr {
+                    None => "id!()".to_string(),
+                    Some(ra) => {
+                        let text = ra.name.text.span.value();
+                        match &ra.param {
+                            None => {
+                                format!("id!(\"{}\")", text)
+                            }
+                            Some((_, expr, _)) => {
+                                format!(
+                                    "id!(\"{}\";{})",
+                                    text,
+                                    Self::generate_expr(expr, false, true)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             fn generate_attribute(attr: &KeyValueAttribute) -> String {
                 let value = match &attr.value {
                     AttributeValue::StrLit(lit) => lit.lit.span.value().to_string(),
                     AttributeValue::Block(block) => Self::generate_expr(&block.expr, false, true),
                 };
-                format!(
-                    "(\"{}\".to_string(), C::attr({}))",
-                    attr.name.text.span.value(),
-                    value
-                )
+                format!("\"{}\" => C::attr({})", attr.name.text.span.value(), value)
             }
 
-            fn generate_attributes(attrs: &Vec<Attribute>) -> String {
+            fn generate_attributes(attrs: &Vec<KeyValueAttribute>) -> String {
                 let inner = attrs
                     .iter()
-                    .filter(|attr| match attr {
-                        Attribute::Ref(_) => false,
-                        Attribute::KeyValue(_) => true,
-                    })
-                    .map(|attr| match attr {
-                        Attribute::Ref(_) => unreachable!(),
-                        Attribute::KeyValue(kva) => kva,
-                    })
                     .map(|attr| Self::generate_attribute(attr))
                     .collect::<Vec<String>>()
                     .join(",");
-                format!("HashMap::from([{}])", inner)
+                format!("attrs!{{{}}}", inner)
             }
 
             fn generate_tag(tag: &TagNode, in_attr: bool) -> String {
                 let tag_name = tag.name.text.span.value();
                 let attrs = Self::generate_attributes(&tag.attributes);
+                let id_attr = Self::generate_ref_attribute(&tag.ref_attribute);
                 let node = match &tag.block {
                     Some(tag_block) => {
                         let mut children = vec![];
@@ -599,17 +617,17 @@ pub mod rs {
                             children.push(format!("{}", e));
                             i += 1;
                         }
-                        let flatten = if children.is_empty() {
-                            ""
-                        } else {
-                            ".flatten()"
+                        let id_infer = match &tag.ref_attribute {
+                            None => "::<()>",
+                            Some(_) => "",
                         };
                         format!(
-                            "C::el(\"{}\", || {}, || vec![{}]{}, {})",
+                            "C::el{}(\"{}\", {}, {}, childs![{}], {})",
+                            id_infer,
                             tag_name,
                             attrs,
-                            children.join(",\n"),
-                            flatten,
+                            id_attr,
+                            children.join(","),
                             in_attr
                         )
                     }
@@ -720,7 +738,7 @@ pub mod rs {
                 let generics_def_str = generics.type_var_def_str();
                 let generics_str = generics.type_var_str();
                 let props_type = format!("pub type Props<{}> = {};", &generics_str, props_type_str);
-                str.push_str(&format!("use rex::{{Config, ChildFn, AttributeFn, ChildValue, AttributeValue}}; use structx::*; {} pub fn render<{}, C: Config>(props: &Props<{}>) -> Vec<C::Node> {{", props_type, &generics_def_str, &generics_str));
+                str.push_str(&format!("use rex::{{idref, childs, attrs, Config, ChildFn, AttributeFn, ChildValue, AttributeValue}}; use structx::*; {} pub fn render<{}, C: Config>(props: &Props<{}>) -> Vec<C::Node> {{", props_type, &generics_def_str, &generics_str));
                 match &view.root {
                     None => {}
                     Some(nob) => str.push_str(&Self::generate_node_or_block(&nob, false, false)),

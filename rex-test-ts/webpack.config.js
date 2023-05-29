@@ -3,11 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-var path_1 = __importDefault(require("path"));
+const path_1 = __importDefault(require("path"));
 // in case you run into any typescript error when configuring `devServer`
 require("webpack-dev-server");
-var html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
-var config = {
+const html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
+const config = {
     module: {
         rules: [
             { test: /\.ts$/, loader: 'ts-loader', exclude: /node_modules/ },

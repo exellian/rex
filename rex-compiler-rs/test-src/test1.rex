@@ -1,4 +1,4 @@
-<test #wrapper{0} name={ "Hallo Welt" } test={ <div> Hallo hafksjdlfj </div> }>
+<test #wrapper name={ "Hallo Welt" } test={ <div> Hallo hafksjdlfj </div> }>
     <div class="well-done">
         <a href="https://localhost:8000/post"></a>
     </div>

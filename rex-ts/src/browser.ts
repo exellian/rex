@@ -1,18 +1,31 @@
-export function el(name: string, attributes: { [key: string]: any }, children: any[]): Node {
-    let element = document.createElement(name)
-    for (const key in attributes) {
-        element.setAttribute(key, attributes[key]().toString())
+import {Config, render, Render} from "./index";
+
+export class BrowserConfig implements Config<Node> {
+    attr(input: Render): string {
+        return render(input);
     }
-    for (const f_child of children.flat(Infinity)) {
-        let child = f_child()
-        if (child instanceof Node) {
-            element.appendChild(child)
-        } else {
-            element.appendChild(text(child.toString()))
+
+    el<T>(
+        tagName: string,
+        attributes: Map<string, () => string>,
+        id: () => ([string, T | null] | null),
+        children: Array<() => Node[]>,
+        inAttr: boolean
+    ): Node[] {
+        let element= document.createElement(tagName)
+        for (const [key, val] of attributes) {
+            element.setAttribute(key, val())
         }
+        for (const childFn of children) {
+            let childs = childFn()
+            childs.forEach(element.appendChild)
+        }
+        return [element];
     }
-    return element
-}
-export function text(value: string): Node {
-    return document.createTextNode(value)
+
+    text(text: Render, inAttr: boolean): Node[] {
+        let element = document.createTextNode(render(text))
+        return [element]
+    }
+
 }
